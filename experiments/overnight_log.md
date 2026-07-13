@@ -61,7 +61,17 @@ Decision at ~100k steps (~1h): `eval_goals.py` each; keep the 1-2 best config di
 - **J — combo** (LOCAL): C-base (alive=1,prox=2,spawn=0.35,radius=0.13) + STICKY(slack_dwell=15,det_v=0.5,det_h=0.1,slack_margin=0.05) + HOLD(tension=12,lock=12,progress=25) + STABILITY(max_log_std=-0.7,entropy=0.001). Hypothesis: hold levers lift 46%->higher, stability prevents the collapse that killed C.
 
 **F EVAL (arrived ~21:35): F @100k (low-explore max_log_std=-0.5, radius 0.10) = catch 0.108 / hold 0.579 / att 0.054.**
-=> **KEY: low exploration gives the BEST hold (58% vs C 46%, D 36%).** Confirms exploration noise hurts holding; calmer policy holds better. Catch low (11%) mostly due to radius 0.10 + less exploration during training. **This validates J** (easy high-catch base + even lower std -0.7 + hold levers). Winning recipe forming: easy catch base (radius 0.13, alive=1) + LOW exploration + hold support -> both goals. J is the arm to watch; if J underwhelms, try F-recipe at radius 0.13.
+=> **KEY: low exploration gives the BEST hold (58% vs C 46%, D 36%).** Confirms exploration noise hurts holding; calmer policy holds better.
+
+## Wave-3 eval (~22:20) — STICKY IS A CRUTCH; drop it. Eval PEAK checkpoints.
+- **eval_goals.py evaluates every arm under the BASE (strict) detach model.** Arms that OVERRIDE the detach model (sticky: G, J) are thus trained-forgiving / evaled-strict -> their "hold" is a crutch that DOESN'T transfer:
+  - **G sticky peak@50k: catch 0.108 / hold 0.171** (training att_frac peaked 0.121 but only because the hook couldn't fall off). INVALID -> killed.
+  - **J combo peak@42.5k: catch 0.228 / hold 0.174** (sticky + low-std -0.7 + holdreward). Also crutch -> killed. (Also: std -0.7 + entropy 0.001 peaked EARLY @42k -> too low, premature collapse.)
+- **F peak@107.5k (honest): catch 0.101 / hold 0.495** (hold varies 50-58% across peak region). Best HONEST hold. std=-0.5 peaked LATE (107k) = more stable than J's -0.7.
+- **CONCLUSION: honest recipe = easy catch base (radius 0.13, alive=1) + LOW exploration (max_log_std=-0.5, NOT -0.7) + hold rewards. NO detach override.** Also: universal peak-then-collapse (arms peak 40-110k then decline) -> lower std delays the peak; must eval at peak.
+
+### Wave 4 (RUNNING)
+- **K — honest combo** (LOCAL): COMMON + EASY(alive=1,prox=2,spawn=0.35,radius=0.13) + HOLD(tension=10,lock=10,progress=20) + max_log_std=-0.5. NO sticky. The honest C-catch + F-hold + hold-reward combine. Arm to beat.
 
 ### Wave 2 (RUNNING) — attack the HOLD gap, on C's proven easy base (spawn=0.35, radius=0.13, alive=1, prox=2)
 - **G — sticky hook** (ALC): `attachment.slack_dwell_steps=15 detach_p_vertical=0.5 detach_p_horizontal=0.1 slack_margin=0.05`. Forgiving detach so brief tension dips don't drop the hook -> policy can practise the hold.
@@ -74,7 +84,8 @@ Decision at ~100k steps (~1h): `eval_goals.py` each; keep the 1-2 best config di
 | 1 | C easy | LOCAL | ..._v22C_easy | **125k** | **0.413** | **0.460** | 0.099 | BEST-SO-FAR; collapsed @220k(0.23/0.25) -> KILLED, 125k ckpt saved |
 | 1 | D killeasy | ALC | ..._v22D_killeasy | 90k | 0.101 | 0.362 | 0.022 | weak (alive=0 hurt); let run, low priority |
 | 1 | E incentive | ALC | - | 52k | - | - | - | KILLED |
-| 1 | F commit | ALC | ..._v22F_commit | 100k | 0.108 | **0.579** | 0.054 | BEST HOLD; low-explore wins for holding. radius 0.10 limits catch. Let run |
-| 2 | G sticky | ALC | ..._v22G_sticky | ~40k | (cooking) | | | RUNNING |
-| 2 | H holdreward | ALC | ..._v22H_holdreward | ~40k | (cooking) | | | RUNNING |
-| 3 | J combo | LOCAL | ..._v22J_combo | - | | | | RUNNING (sticky+hold+stability) |
+| 1 | F commit | ALC | ..._v22F_commit | 100k/107.5k | 0.108 | **0.58/0.50** | 0.054 | BEST HONEST HOLD; low-explore (std-0.5) + late peak. radius 0.10 caps catch. running (past peak) |
+| 2 | G sticky | ALC | ..._v22G_sticky | 50k(pk) | 0.108 | 0.171 | 0.032 | INVALID (sticky crutch, fails strict eval) -> KILLED |
+| 2 | H holdreward | ALC | ..._v22H_holdreward | ~90k | pending-eval | | | honest hold-reward test; RUNNING |
+| 3 | J combo | LOCAL | ..._v22J_combo | 42.5k(pk) | 0.228 | 0.174 | 0.049 | INVALID (sticky crutch) + std-0.7 too low -> KILLED |
+| 4 | K honestcombo | LOCAL | ..._v22K_honestcombo | - | | | | RUNNING (C-base + std-0.5 + hold rewards, no sticky) |
