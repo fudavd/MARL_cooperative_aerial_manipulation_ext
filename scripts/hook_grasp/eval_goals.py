@@ -37,6 +37,9 @@ parser.add_argument("--checkpoint", type=str, required=True, help="Path to skrl 
 parser.add_argument("--steps", type=int, default=4000, help="Total sim steps to roll (more -> more episodes).")
 parser.add_argument("--hold_steps", type=int, default=100, help="Consecutive attached steps that count as a hold.")
 parser.add_argument("--capture_radius", type=float, default=-1.0, help="Override catch radius (m); <0 = use cfg.")
+parser.add_argument("--slack_dwell_steps", type=int, default=-1, help="Override detach grace period; <0 = use cfg (base=5).")
+parser.add_argument("--detach_p_vertical", type=float, default=-1.0, help="Override vertical detach prob; <0 = use cfg (base=1.0).")
+parser.add_argument("--detach_p_horizontal", type=float, default=-1.0, help="Override horizontal detach prob; <0 = use cfg (base=0.2).")
 parser.add_argument("--seed", type=int, default=12345, help="Seed.")
 parser.add_argument("--out", type=str, default="", help="Optional path to write a JSON result.")
 parser.add_argument("--ml_framework", type=str, default="torch", choices=["torch", "jax", "jax-numpy"])
@@ -75,6 +78,14 @@ def main():
         env_cfg.hold_success_steps = 10_000_000
     if args_cli.capture_radius > 0 and hasattr(env_cfg, "attachment"):
         env_cfg.attachment.capture_radius = args_cli.capture_radius
+    # optional detach-model overrides for FEASIBILITY BRACKETING (default <0 -> keep base strict model)
+    if hasattr(env_cfg, "attachment"):
+        if args_cli.slack_dwell_steps >= 0:
+            env_cfg.attachment.slack_dwell_steps = args_cli.slack_dwell_steps
+        if args_cli.detach_p_vertical >= 0:
+            env_cfg.attachment.detach_p_vertical = args_cli.detach_p_vertical
+        if args_cli.detach_p_horizontal >= 0:
+            env_cfg.attachment.detach_p_horizontal = args_cli.detach_p_horizontal
 
     experiment_cfg = load_cfg_from_registry(args_cli.task, "skrl_cfg_entry_point")
 
