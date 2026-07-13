@@ -88,6 +88,15 @@ Decision at ~100k steps (~1h): `eval_goals.py` each; keep the 1-2 best config di
 - **M — anticollapse** (ALC): kept running (from-scratch low-explore, best-so-far 18%/56%, still improving).
 NEXT WAKE: eval N/N2/M at peak. Warm-starts start from a catch-competent policy so watch if hold rises toward 80% WITHOUT losing catch. If a warm-start holds >0.55 AND catches >0.30 -> near goal; push exploration/curric further.
 
+## Wave-7 eval (~00:10 Jul14) — warm-start (curric-RESTART) FAILED; retry clean.
+- **N warmstart peak@80k (resume C + std-0.5 + curric restart): catch 0.177 / hold 0.244** — LOST C's catch (41->18) AND hold worse (46->24). Cause: restarting curricula + too-low std disrupted C's converged policy. FAILED.
+- **N2 (std-0.35)**: crashed during boot (transient USD/omni shutdown, no python traceback). Not relaunched as-is.
+- **M full run to 242k**: attached_frac stayed 0.01-0.05 (anti-collapse stopped total death but no climb); best remains 72.5k = 0.18/0.56 (backed up). Killed.
+- **RETRY — clean warm-start (curricula OFF = stay at C's FINAL difficulty, milder std to keep catch):**
+  - **N3 refine025** (LOCAL): resume C + curricula OFF + max_log_std=-0.25 (std 0.78, close to C's 1.0) + KL 0.004.
+  - **N4 refine040** (ALC): resume C + curricula OFF + max_log_std=-0.4 (std 0.67) + KL 0.004.
+- **FEASIBILITY WATCH: hold ceiling ~56-58% across MANY independent arms (C46/F58/M56/K45). 80% may be infeasible under the STRICT base detach model** (slack_dwell=5, detach_p_vertical=1.0 -> a J-hook pulled vertically slides off, guaranteed; pendulum dynamics make perfect tension hard). If N3/N4 don't break ~60%, MORNING REPORT should: (a) present best honest result, (b) note 80% likely needs a task change (mild detach relaxation - legit for a 'surrogate' - or a recurrent policy for swing dynamics), and ASK the user which.
+
 ### Wave 2 (RUNNING) — attack the HOLD gap, on C's proven easy base (spawn=0.35, radius=0.13, alive=1, prox=2)
 - **G — sticky hook** (ALC): `attachment.slack_dwell_steps=15 detach_p_vertical=0.5 detach_p_horizontal=0.1 slack_margin=0.05`. Forgiving detach so brief tension dips don't drop the hook -> policy can practise the hold.
 - **H — hold-reward** (ALC): `tension_weight=12 lock_weight=12 progress_weight=25`. Strongly reward maintaining tension/lock after catch.
