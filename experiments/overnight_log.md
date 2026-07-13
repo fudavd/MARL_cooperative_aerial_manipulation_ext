@@ -44,11 +44,25 @@ Decision at ~100k steps (~1h): `eval_goals.py` each; keep the 1-2 best config di
 
 ---
 
+## Progress log
+- 2026-07-13 ~19:40: committed session state on branch `hook-grasp/overnight-goal-hunt` (799a9ad).
+- 2026-07-13 ~20:35 (wave-1 first eval): **KEY FINDING** — deterministic eval >> noisy training curves. Arm **C @125k: catch_rate=0.413 (GOAL A MET), hold|caught=0.460, attached_frac=0.099**. Training showed success=0 only because exploration noise (std~1.0) knocks the hook off; the trained policy catches 41% and holds 46% deterministically.
+  - ALC arms @~50k all same pattern (catch spikes, attached_frac 1-4%, success 0). B(totR-7) & E(totR-12.8) trending negative/off-target.
+  - **Reframe: catching is solved-ish (>=30% reachable); the GAP is HOLDING (46%->80%, goal B).** Levers: forgiving detach model + hold-phase rewards.
+  - Actions: killed B, E. Kept C(local,best), D(ALC easy twin), F(ALC commit/low-explore). Launched wave 2 (G,H) on C's easy base.
+- Next (~21:15): eval D & F @100k; RE-eval C (more trained -> hold may rise); G/H need ~110min.
+
+### Wave 2 (RUNNING) — attack the HOLD gap, on C's proven easy base (spawn=0.35, radius=0.13, alive=1, prox=2)
+- **G — sticky hook** (ALC): `attachment.slack_dwell_steps=15 detach_p_vertical=0.5 detach_p_horizontal=0.1 slack_margin=0.05`. Forgiving detach so brief tension dips don't drop the hook -> policy can practise the hold.
+- **H — hold-reward** (ALC): `tension_weight=12 lock_weight=12 progress_weight=25`. Strongly reward maintaining tension/lock after catch.
+
 ## Results table
 | wave | arm | machine | run dir | steps@eval | catch_rate | hold\|caught | attached_frac | decision |
 |------|-----|---------|---------|-----------|-----------|-------------|---------------|----------|
-| 1 | B killloiter | ALC | (pending) | | | | | |
-| 1 | C easy | LOCAL | (pending) | | | | | |
-| 1 | D killeasy | ALC | (pending) | | | | | |
-| 1 | E incentive | ALC | (pending) | | | | | |
-| 1 | F commit | ALC | (pending) | | | | | |
+| 1 | B killloiter | ALC | - | 60k | - | - | 0.033pk | KILLED (totR neg, off-target) |
+| 1 | C easy | LOCAL | ..._v22C_easy | 125k | **0.413** | 0.460 | 0.099 | KEEP (best; goal A met, hold gap) |
+| 1 | D killeasy | ALC | ..._v22D_killeasy | 52k | (pending 100k) | | 0.045pk | KEEP |
+| 1 | E incentive | ALC | - | 52k | - | - | 0.028pk | KILLED (totR neg) |
+| 1 | F commit | ALC | ..._v22F_commit | 52k | (pending 100k) | | 0.029pk | KEEP (low-explore) |
+| 2 | G sticky | ALC | ..._v22G_sticky | - | | | | RUNNING |
+| 2 | H holdreward | ALC | ..._v22H_holdreward | - | | | | RUNNING |
