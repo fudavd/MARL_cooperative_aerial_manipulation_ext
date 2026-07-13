@@ -60,6 +60,9 @@ Decision at ~100k steps (~1h): `eval_goals.py` each; keep the 1-2 best config di
 ### Wave 3 (RUNNING)
 - **J — combo** (LOCAL): C-base (alive=1,prox=2,spawn=0.35,radius=0.13) + STICKY(slack_dwell=15,det_v=0.5,det_h=0.1,slack_margin=0.05) + HOLD(tension=12,lock=12,progress=25) + STABILITY(max_log_std=-0.7,entropy=0.001). Hypothesis: hold levers lift 46%->higher, stability prevents the collapse that killed C.
 
+**F EVAL (arrived ~21:35): F @100k (low-explore max_log_std=-0.5, radius 0.10) = catch 0.108 / hold 0.579 / att 0.054.**
+=> **KEY: low exploration gives the BEST hold (58% vs C 46%, D 36%).** Confirms exploration noise hurts holding; calmer policy holds better. Catch low (11%) mostly due to radius 0.10 + less exploration during training. **This validates J** (easy high-catch base + even lower std -0.7 + hold levers). Winning recipe forming: easy catch base (radius 0.13, alive=1) + LOW exploration + hold support -> both goals. J is the arm to watch; if J underwhelms, try F-recipe at radius 0.13.
+
 ### Wave 2 (RUNNING) — attack the HOLD gap, on C's proven easy base (spawn=0.35, radius=0.13, alive=1, prox=2)
 - **G — sticky hook** (ALC): `attachment.slack_dwell_steps=15 detach_p_vertical=0.5 detach_p_horizontal=0.1 slack_margin=0.05`. Forgiving detach so brief tension dips don't drop the hook -> policy can practise the hold.
 - **H — hold-reward** (ALC): `tension_weight=12 lock_weight=12 progress_weight=25`. Strongly reward maintaining tension/lock after catch.
@@ -71,7 +74,7 @@ Decision at ~100k steps (~1h): `eval_goals.py` each; keep the 1-2 best config di
 | 1 | C easy | LOCAL | ..._v22C_easy | **125k** | **0.413** | **0.460** | 0.099 | BEST-SO-FAR; collapsed @220k(0.23/0.25) -> KILLED, 125k ckpt saved |
 | 1 | D killeasy | ALC | ..._v22D_killeasy | 90k | 0.101 | 0.362 | 0.022 | weak (alive=0 hurt); let run, low priority |
 | 1 | E incentive | ALC | - | 52k | - | - | - | KILLED |
-| 1 | F commit | ALC | ..._v22F_commit | ~100k | pending | | | eval compute-starved, read next wake |
+| 1 | F commit | ALC | ..._v22F_commit | 100k | 0.108 | **0.579** | 0.054 | BEST HOLD; low-explore wins for holding. radius 0.10 limits catch. Let run |
 | 2 | G sticky | ALC | ..._v22G_sticky | ~40k | (cooking) | | | RUNNING |
 | 2 | H holdreward | ALC | ..._v22H_holdreward | ~40k | (cooking) | | | RUNNING |
 | 3 | J combo | LOCAL | ..._v22J_combo | - | | | | RUNNING (sticky+hold+stability) |
