@@ -50,7 +50,15 @@ Decision at ~100k steps (~1h): `eval_goals.py` each; keep the 1-2 best config di
   - ALC arms @~50k all same pattern (catch spikes, attached_frac 1-4%, success 0). B(totR-7) & E(totR-12.8) trending negative/off-target.
   - **Reframe: catching is solved-ish (>=30% reachable); the GAP is HOLDING (46%->80%, goal B).** Levers: forgiving detach model + hold-phase rewards.
   - Actions: killed B, E. Kept C(local,best), D(ALC easy twin), F(ALC commit/low-explore). Launched wave 2 (G,H) on C's easy base.
-- Next (~21:15): eval D & F @100k; RE-eval C (more trained -> hold may rise); G/H need ~110min.
+- 2026-07-13 ~21:20 (wave-2 eval): **C COLLAPSED** — re-eval @220k = 0.226/0.248 (vs 0.413/0.460 @125k). Classic peak-then-collapse. **C's BEST = 125k checkpoint (0.413 catch / 0.460 hold), saved. Killed C's process.**
+  - D @90k (kill-loiter, alive=0): 0.101 catch / 0.362 hold — `alive=0` is WORSE than C's `alive=1`; removing the alive bonus hurt. So C's light-loiter base is right.
+  - F (low-explore): eval compute-starved by 4 ALC training arms, pending -> read next wake.
+  - **Two lessons:** (1) must eval PEAK checkpoints, not latest (collapse). (2) stability matters — likely exploration-driven; F tests it, and wave-3 J bakes in anti-collapse (low std + low entropy).
+  - Launched **wave 3 J (combo)** on freed local GPU: C-base + sticky + hold-reward + stability.
+- Next (~22:05): read F; eval J @~90k (local, fast); G/H still cooking (~70k). Eval arms at their PEAK (watch tensorboard attached_frac peak).
+
+### Wave 3 (RUNNING)
+- **J — combo** (LOCAL): C-base (alive=1,prox=2,spawn=0.35,radius=0.13) + STICKY(slack_dwell=15,det_v=0.5,det_h=0.1,slack_margin=0.05) + HOLD(tension=12,lock=12,progress=25) + STABILITY(max_log_std=-0.7,entropy=0.001). Hypothesis: hold levers lift 46%->higher, stability prevents the collapse that killed C.
 
 ### Wave 2 (RUNNING) — attack the HOLD gap, on C's proven easy base (spawn=0.35, radius=0.13, alive=1, prox=2)
 - **G — sticky hook** (ALC): `attachment.slack_dwell_steps=15 detach_p_vertical=0.5 detach_p_horizontal=0.1 slack_margin=0.05`. Forgiving detach so brief tension dips don't drop the hook -> policy can practise the hold.
@@ -60,9 +68,10 @@ Decision at ~100k steps (~1h): `eval_goals.py` each; keep the 1-2 best config di
 | wave | arm | machine | run dir | steps@eval | catch_rate | hold\|caught | attached_frac | decision |
 |------|-----|---------|---------|-----------|-----------|-------------|---------------|----------|
 | 1 | B killloiter | ALC | - | 60k | - | - | 0.033pk | KILLED (totR neg, off-target) |
-| 1 | C easy | LOCAL | ..._v22C_easy | 125k | **0.413** | 0.460 | 0.099 | KEEP (best; goal A met, hold gap) |
-| 1 | D killeasy | ALC | ..._v22D_killeasy | 52k | (pending 100k) | | 0.045pk | KEEP |
-| 1 | E incentive | ALC | - | 52k | - | - | 0.028pk | KILLED (totR neg) |
-| 1 | F commit | ALC | ..._v22F_commit | 52k | (pending 100k) | | 0.029pk | KEEP (low-explore) |
-| 2 | G sticky | ALC | ..._v22G_sticky | - | | | | RUNNING |
-| 2 | H holdreward | ALC | ..._v22H_holdreward | - | | | | RUNNING |
+| 1 | C easy | LOCAL | ..._v22C_easy | **125k** | **0.413** | **0.460** | 0.099 | BEST-SO-FAR; collapsed @220k(0.23/0.25) -> KILLED, 125k ckpt saved |
+| 1 | D killeasy | ALC | ..._v22D_killeasy | 90k | 0.101 | 0.362 | 0.022 | weak (alive=0 hurt); let run, low priority |
+| 1 | E incentive | ALC | - | 52k | - | - | - | KILLED |
+| 1 | F commit | ALC | ..._v22F_commit | ~100k | pending | | | eval compute-starved, read next wake |
+| 2 | G sticky | ALC | ..._v22G_sticky | ~40k | (cooking) | | | RUNNING |
+| 2 | H holdreward | ALC | ..._v22H_holdreward | ~40k | (cooking) | | | RUNNING |
+| 3 | J combo | LOCAL | ..._v22J_combo | - | | | | RUNNING (sticky+hold+stability) |
