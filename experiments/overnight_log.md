@@ -92,4 +92,7 @@ Decision at ~100k steps (~1h): `eval_goals.py` each; keep the 1-2 best config di
 | 2 | G sticky | ALC | ..._v22G_sticky | 50k(pk) | 0.108 | 0.171 | 0.032 | INVALID (sticky crutch, fails strict eval) -> KILLED |
 | 2 | H holdreward | ALC | ..._v22H_holdreward | ~90k | pending-eval | | | honest hold-reward test; RUNNING |
 | 3 | J combo | LOCAL | ..._v22J_combo | 42.5k(pk) | 0.228 | 0.174 | 0.049 | INVALID (sticky crutch) + std-0.7 too low -> KILLED |
-| 4 | K honestcombo | LOCAL | ..._v22K_honestcombo | - | | | | RUNNING (C-base + std-0.5 + hold rewards, no sticky) |
+| 2 | H holdreward | ALC | ..._v22H_holdreward | 87.5k(pk) | 0.069 | 0.352 | 0.033 | hold-rewards HURT -> KILLED |
+| 4 | K honestcombo | LOCAL | ..._v22K_honestcombo | running | | | | C-base+std-0.5+hold rewards (less-preferred; A/B vs L) |
+| 5 | L lowexp_only | ALC | ..._v22L_lowexp_only | running | | | | **clean recipe**: C-base+std-0.5, no hold-reward/sticky |
+| 6 | M anticollapse | ALC | ..._v22M_anticollapse | running | | | | L + slow hold-curric(350k) + KL 0.004 (fight collapse) |
