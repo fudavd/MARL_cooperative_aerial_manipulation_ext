@@ -75,7 +75,18 @@ Decision at ~100k steps (~1h): `eval_goals.py` each; keep the 1-2 best config di
 - **K — combo** (LOCAL): C-base + max_log_std=-0.5 + HOLD(tension=10,lock=10,progress=20). Now a LESS-preferred bet (has hold-rewards which H showed hurt); keep as K-vs-L A/B datapoint.
 - **L — low-explore ONLY** (ALC): C-base(alive=1,prox=2,spawn=0.35,radius=0.13) + max_log_std=-0.5, NO hold-reward, NO sticky. **The clean winning recipe** — should give ~40% catch + ~55% hold.
 
-**REMAINING BLOCKER: hold ceiling ~58% (F) << 80% goal, AND universal peak-then-collapse.** Hypothesis for collapse: hold_curriculum ramps hold_req 30->100 over 150k; as the milestone outpaces the policy, success/progress signal vanishes -> unlearns catch (C peaked ~125k near curriculum end). Wave 6 idea: slower/capped hold curriculum + tighter KL (kl_threshold 0.008->0.004) / lower LR to prevent lurching -> higher, later peak -> better hold. NEXT WAKE: verify collapse-vs-hold_curriculum timing; eval K & L at peak.
+## Wave-5/6 eval (~22:35) — ANTI-COLLAPSE WORKS; catch-hold TENSION is the crux; WARM-START strategy.
+- K peak@97.5k (hold-rewards): 0.177/0.454 — hold-rewards drag catch down, no hold gain. Dominated by C. Killed.
+- L peak@52.5k (clean low-explore): 0.113/0.259 — peaked early+low. Dominated by M. Killed.
+- **M peak@72.5k (anti-collapse: slow curric 350k + KL 0.004): 0.177 catch / 0.559 hold, att_frac 0.127 (highest yet), STILL CLIMBING (not collapsed).** vs L (no anti-collapse) 0.11/0.26 -> **anti-collapse clearly works: later peak, higher plateau, no collapse.**
+- **CATCH-HOLD TENSION (core problem): high exploration -> good CATCH (C 41%) but bad hold; low exploration -> good HOLD (M 56%, F 58%) but bad catch (11-18%). No single from-scratch arm gets both.** Best joint policy so far = C (41%/46%).
+- **STRATEGY: WARM-START from C's 125k (already catches 41%) + low-explore + anti-collapse to LIFT HOLD while keeping the learned catch skill.** (explore-to-learn-catch, then exploit-to-refine-hold.)
+
+### Wave 6-7 (RUNNING) — warm-start from C + calm exploration + anti-collapse
+- **N — warmstart** (LOCAL): resume C 125k + max_log_std=-0.5 + slow curric(350k) + KL 0.004. Moderate calm.
+- **N2 — warmcalm** (ALC): resume C 125k + max_log_std=-0.35 (very calm, max hold) + slow curric + KL 0.004.
+- **M — anticollapse** (ALC): kept running (from-scratch low-explore, best-so-far 18%/56%, still improving).
+NEXT WAKE: eval N/N2/M at peak. Warm-starts start from a catch-competent policy so watch if hold rises toward 80% WITHOUT losing catch. If a warm-start holds >0.55 AND catches >0.30 -> near goal; push exploration/curric further.
 
 ### Wave 2 (RUNNING) — attack the HOLD gap, on C's proven easy base (spawn=0.35, radius=0.13, alive=1, prox=2)
 - **G — sticky hook** (ALC): `attachment.slack_dwell_steps=15 detach_p_vertical=0.5 detach_p_horizontal=0.1 slack_margin=0.05`. Forgiving detach so brief tension dips don't drop the hook -> policy can practise the hold.
@@ -93,6 +104,8 @@ Decision at ~100k steps (~1h): `eval_goals.py` each; keep the 1-2 best config di
 | 2 | H holdreward | ALC | ..._v22H_holdreward | ~90k | pending-eval | | | honest hold-reward test; RUNNING |
 | 3 | J combo | LOCAL | ..._v22J_combo | 42.5k(pk) | 0.228 | 0.174 | 0.049 | INVALID (sticky crutch) + std-0.7 too low -> KILLED |
 | 2 | H holdreward | ALC | ..._v22H_holdreward | 87.5k(pk) | 0.069 | 0.352 | 0.033 | hold-rewards HURT -> KILLED |
-| 4 | K honestcombo | LOCAL | ..._v22K_honestcombo | running | | | | C-base+std-0.5+hold rewards (less-preferred; A/B vs L) |
-| 5 | L lowexp_only | ALC | ..._v22L_lowexp_only | running | | | | **clean recipe**: C-base+std-0.5, no hold-reward/sticky |
-| 6 | M anticollapse | ALC | ..._v22M_anticollapse | running | | | | L + slow hold-curric(350k) + KL 0.004 (fight collapse) |
+| 4 | K honestcombo | LOCAL | ..._v22K | 97.5k(pk) | 0.177 | 0.454 | 0.109 | hold-rewards hurt catch -> KILLED |
+| 5 | L lowexp_only | ALC | ..._v22L | 52.5k(pk) | 0.113 | 0.259 | 0.015 | dominated by M -> KILLED |
+| 6 | M anticollapse | ALC | ..._v22M | 72.5k(pk) | 0.177 | **0.559** | 0.127 | anti-collapse WORKS; still climbing; KEEP |
+| 7 | N warmstart | LOCAL | ..._v22N | running | | | | resume C + std-0.5 + anticollapse |
+| 7 | N2 warmcalm | ALC | ..._v22N2 | running | | | | resume C + std-0.35 + anticollapse |
