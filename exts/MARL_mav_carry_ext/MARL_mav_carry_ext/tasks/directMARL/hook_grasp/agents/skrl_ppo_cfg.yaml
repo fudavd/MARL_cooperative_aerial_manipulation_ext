@@ -1,0 +1,98 @@
+seed: 42
+
+
+# Models are instantiated using skrl's model instantiator utility
+# https://skrl.readthedocs.io/en/latest/api/utils/model_instantiators.html
+models:
+  separate: False
+  CTDE: False # Centralized Training with Decentralized Execution
+  separate_actors: False # separate models for each agent
+  separate_critics: False # separate models for each agent
+  policy:  # see gaussian_model parameters
+    class: GaussianMixin
+    clip_actions: False
+    clip_log_std: True
+    min_log_std: -3.0          # floor on action std (exp(-3.0)~0.05): blocks full entropy/std collapse WITHOUT
+                               # flooding precise flight with noise (-1.5 -> std 0.22 stalled the approach)
+    max_log_std: 0.0           # ceiling on action std (exp(0)=1.0). Middle ground: 2.0 let std explode to 7.4
+                               # (chaotic), -0.7 (std 0.5) was too tight to explore the catch. With the reward now
+                               # non-suicidal, std should settle below this on its own rather than pin at the cap.
+    initial_log_std: 0.0
+    network:
+      - name: net
+        input: STATES
+        layers: [512, 256, 128]
+        activations:
+        - elu
+
+    output: ACTIONS
+  value:  # see deterministic_model parameters
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: STATES
+        layers: [512, 256, 128]
+        activations: elu
+    output: ONE
+
+
+# Rollout memory
+# https://skrl.readthedocs.io/en/latest/api/memories/random.html
+memory:
+  class: RandomMemory
+  memory_size: -1  # automatically determined (same as agent:rollouts)
+
+
+# PPO agent configuration (field names are from PPO_DEFAULT_CONFIG)
+# https://skrl.readthedocs.io/en/latest/api/agents/ppo.html
+agent:
+  class: PPO
+  rollouts: 32
+  learning_epochs: 5
+  mini_batches: 32
+  discount_factor: 0.99
+  lambda: 0.95
+  learning_rate: 1.0e-03
+  # KL-adaptive LR: train.py resolves the skrl class. The LR shrinks when a policy update exceeds the target KL
+  # and grows when below it -> it automatically slows down when the policy starts to lurch, which is the exact
+  # dynamic behind the "peak-then-collapse". (Swap back to CosineAnnealingLR + eta_min for a fixed anneal.)
+  learning_rate_scheduler: KLAdaptiveLR
+  learning_rate_scheduler_kwargs:
+    kl_threshold: 0.008
+  state_preprocessor: RunningStandardScaler
+  state_preprocessor_kwargs: {"size": env.observation_space, "device": device}
+  value_preprocessor: RunningStandardScaler
+  value_preprocessor_kwargs: {"size": 1, "device": device}
+  random_timesteps: 0
+  learning_starts: 0
+  grad_norm_clip: 1.0
+  ratio_clip: 0.2
+  value_clip: 0.2
+  clip_predicted_values: True
+  entropy_loss_scale: 0.003   # moderate (was 0.01 too high -> std ceiling; 0.001 too low). Keeps some exploration
+                              # policy). Less entropy weight lets the policy gradient tighten std once it finds signal.
+  value_loss_scale: 1.0
+  kl_threshold: 0.0
+  rewards_shaper_scale: 1.0
+  time_limit_bootstrap: False
+  # logging and checkpoint
+  experiment:
+    directory: "ppo_flycrane_hook"
+    experiment_name: ""
+    write_interval: 100
+    checkpoint_interval: 2500
+    # log to Weights & Biases (skrl syncs the tensorboard stream to wandb).
+    wandb: True
+    wandb_kwargs:
+      project: "hook-grasp-flycrane"
+
+
+
+
+# Sequential trainer
+# https://skrl.readthedocs.io/en/latest/api/trainers/sequential.html
+trainer:
+  class: SequentialTrainer
+  timesteps: 200000
+  environment_info: log

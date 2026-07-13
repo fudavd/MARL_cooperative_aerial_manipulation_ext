@@ -10,3 +10,12 @@ profile.sh
 *.sqlite3
 *.db
 reference_trajectories/
+
+# --- session additions: environments, vendored deps, IDE, run outputs ---
+.venv/
+thirdparty/
+.idea/
+scripts/**/_render*/
+experiments/*.log
+experiments/hebbian_vs_mappo/
+experiments/hook_grasp_ppo/

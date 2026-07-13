@@ -172,7 +172,13 @@ def main():
     runner.agent.load(resume_path)
     # set agent to evaluation mode
     runner.agent.set_running_mode("eval")
-    plotter = DirectMARLPlotter(env, control_mode=args_cli.control_mode)
+    # DirectMARLPlotter is transport/hover-specific (needs a load body, pose_command_w). Make it optional
+    # so other tasks (e.g. hook-grasp) can still record a video without it.
+    try:
+        plotter = DirectMARLPlotter(env, control_mode=args_cli.control_mode)
+    except Exception as e:  # noqa: BLE001
+        print(f"[WARN] DirectMARLPlotter unavailable for this task ({type(e).__name__}: {e}); skipping plots.")
+        plotter = None
 
     # reset environment
     obs, _ = env.reset()
@@ -191,7 +197,7 @@ def main():
             else:
                 actions = outputs[-1].get("mean_actions", outputs[0])
             # env stepping
-            if env.num_envs == 1:
+            if env.num_envs == 1 and plotter is not None:
                 plotter.collect_data()
             obs, _, _, _, _ = env.step(actions)
 
@@ -208,7 +214,7 @@ def main():
     # close the simulator
     env.close()
 
-    if env.num_envs == 1:
+    if env.num_envs == 1 and plotter is not None:
         if args_cli.save_plots:
             # save plots
             plot_path = os.path.join(log_dir, "plots", "play")

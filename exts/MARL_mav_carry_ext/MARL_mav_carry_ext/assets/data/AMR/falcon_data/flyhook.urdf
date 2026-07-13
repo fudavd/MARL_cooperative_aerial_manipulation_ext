@@ -1,0 +1,486 @@
+<?xml version="1.0" ?>
+<robot name="Flyhook">
+  <link name="Falcon/base_link"/>
+  <joint name="Falcon/base_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0 0.03"/>
+    <parent link="Falcon/base_link"/>
+    <child link="Falcon/base_link_inertia"/>
+  </joint>
+  <link name="Falcon/base_link_inertia">
+    <inertial>
+      <mass value="0.6"/>
+      <!-- [kg] -->
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0.00164" ixy="0.0" ixz="0.0" iyy="0.00184" iyz="0.0" izz="0.0030"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 1.5708" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.1 0.1 0.05"/>
+        <!-- [m] [m] [m] -->
+      </geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.1 0.1 0.05"/>
+        <!-- [m] [m] [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="Falcon/rotor_0_joint" type="continuous">
+    <origin rpy="0 0 0" xyz="0.075 0.075 0.05"/>
+    <axis xyz="0 0 1"/>
+    <!-- <limit effort="2000" velocity="${max_rot_velocity}" /> -->
+    <parent link="Falcon/base_link"/>
+    <child link="Falcon/rotor_0"/>
+  </joint>
+  <link name="Falcon/rotor_0">
+    <inertial>
+      <origin xyz="0 0 0" />
+      <mass value="0.0042"/>
+      <!-- [kg] -->
+      <inertia ixx="8.189996723999999e-07" ixy="0.0" ixz="0.0" iyy="5.648297740679999e-05" iyz="0.0" izz="5.72389771044e-05"/>
+    </inertial>
+    <visual>
+    <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="Falcon_PropellerCW.dae" scale="1.0 1.0 1.0"/>
+        <!-- The propeller meshes have a radius of 1m -->
+        <box size="0.254 0.01 0.005"/>
+      </geometry>
+    </visual>
+    <collision>
+    <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <cylinder length="0.005" radius="0.127"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="Falcon/rotor_1_joint" type="continuous">
+    <origin rpy="0 0 0" xyz="0.075 -0.075 0.05"/>
+    <axis xyz="0 0 1"/>
+    <!-- <limit effort="2000" velocity="${max_rot_velocity}" /> -->
+    <parent link="Falcon/base_link"/>
+    <child link="Falcon/rotor_1"/>
+  </joint>
+  <link name="Falcon/rotor_1">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="0.0042"/>
+      <!-- [kg] -->
+      <inertia ixx="8.189996723999999e-07" ixy="0.0" ixz="0.0" iyy="5.648297740679999e-05" iyz="0.0" izz="5.72389771044e-05"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="Falcon_PropellerCCW.dae" scale="1.0 1.0 1.0"/>
+        <!-- The propeller meshes have a radius of 1m -->
+        <box size="0.254 0.01 0.005"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <cylinder length="0.005" radius="0.127"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="Falcon/rotor_2_joint" type="continuous">
+    <origin rpy="0 0 0" xyz="-0.075 -0.075 0.05"/>
+    <axis xyz="0 0 1"/>
+    <!-- <limit effort="2000" velocity="${max_rot_velocity}" /> -->
+    <parent link="Falcon/base_link"/>
+    <child link="Falcon/rotor_2"/>
+  </joint>
+  <link name="Falcon/rotor_2">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="0.0042"/>
+      <!-- [kg] -->
+      <inertia ixx="8.189996723999999e-07" ixy="0.0" ixz="0.0" iyy="5.648297740679999e-05" iyz="0.0" izz="5.72389771044e-05"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="Falcon_PropellerCW.dae" scale="1.0 1.0 1.0"/>
+        <!-- The propeller meshes have a radius of 1m -->
+        <box size="0.254 0.01 0.005"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <cylinder length="0.005" radius="0.127"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+  <joint name="Falcon/rotor_3_joint" type="continuous">
+    <origin rpy="0 0 0" xyz="-0.075 0.075 0.05"/>
+    <axis xyz="0 0 1"/>
+    <!-- <limit effort="2000" velocity="${max_rot_velocity}" /> -->
+    <parent link="Falcon/base_link"/>
+    <child link="Falcon/rotor_3"/>
+  </joint>
+  <link name="Falcon/rotor_3">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="0.0042"/>
+      <!-- [kg] -->
+      <inertia ixx="8.189996723999999e-07" ixy="0.0" ixz="0.0" iyy="5.648297740679999e-05" iyz="0.0" izz="5.72389771044e-05"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="Falcon_PropellerCCW.dae" scale="1.0 1.0 1.0"/>
+        <!-- The propeller meshes have a radius of 1m -->
+        <box size="0.254 0.01 0.005"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <cylinder length="0.005" radius="0.127"/>
+        <!-- [m] -->
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- wire node 0: spherical joint = revolute-X then revolute-Y through a massless dummy -->
+  <joint name="wire_link_0_joint_x" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 0.000000"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="0.0" lower="-1.5708" upper="1.5708" velocity="100.0"/>
+    <dynamics damping="0.005"/>
+    <parent link="Falcon/base_link"/>
+    <child link="wire_dummy_0"/>
+  </joint>
+  <link name="wire_dummy_0">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="1e-4"/>
+      <inertia ixx="1e-7" ixy="0.0" ixz="0.0" iyy="1e-7" iyz="0.0" izz="1e-7"/>
+    </inertial>
+  </link>
+  <joint name="wire_link_0_joint_y" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="0.0" lower="-1.5708" upper="1.5708" velocity="100.0"/>
+    <dynamics damping="0.005"/>
+    <parent link="wire_dummy_0"/>
+    <child link="wire_link_0"/>
+  </joint>
+  <link name="wire_link_0">
+    <inertial>
+      <origin xyz="0 0 -0.034375"/>
+      <mass value="0.002500"/>
+      <inertia ixx="9.880e-07" ixy="0.0" ixz="0.0" iyy="9.880e-07" iyz="0.0" izz="6.667e-09"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 -0.034375"/>
+      <geometry><cylinder length="0.068750" radius="0.004"/></geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 -0.034375"/>
+      <geometry><cylinder length="0.068750" radius="0.004"/></geometry>
+    </collision>
+  </link>
+  <!-- wire node 1: spherical joint = revolute-X then revolute-Y through a massless dummy -->
+  <joint name="wire_link_1_joint_x" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 -0.068750"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="0.0" lower="-1.5708" upper="1.5708" velocity="100.0"/>
+    <dynamics damping="0.005"/>
+    <parent link="wire_link_0"/>
+    <child link="wire_dummy_1"/>
+  </joint>
+  <link name="wire_dummy_1">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="1e-4"/>
+      <inertia ixx="1e-7" ixy="0.0" ixz="0.0" iyy="1e-7" iyz="0.0" izz="1e-7"/>
+    </inertial>
+  </link>
+  <joint name="wire_link_1_joint_y" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="0.0" lower="-1.5708" upper="1.5708" velocity="100.0"/>
+    <dynamics damping="0.005"/>
+    <parent link="wire_dummy_1"/>
+    <child link="wire_link_1"/>
+  </joint>
+  <link name="wire_link_1">
+    <inertial>
+      <origin xyz="0 0 -0.034375"/>
+      <mass value="0.002500"/>
+      <inertia ixx="9.880e-07" ixy="0.0" ixz="0.0" iyy="9.880e-07" iyz="0.0" izz="6.667e-09"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 -0.034375"/>
+      <geometry><cylinder length="0.068750" radius="0.004"/></geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 -0.034375"/>
+      <geometry><cylinder length="0.068750" radius="0.004"/></geometry>
+    </collision>
+  </link>
+  <!-- wire node 2: spherical joint = revolute-X then revolute-Y through a massless dummy -->
+  <joint name="wire_link_2_joint_x" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 -0.068750"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="0.0" lower="-1.5708" upper="1.5708" velocity="100.0"/>
+    <dynamics damping="0.005"/>
+    <parent link="wire_link_1"/>
+    <child link="wire_dummy_2"/>
+  </joint>
+  <link name="wire_dummy_2">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="1e-4"/>
+      <inertia ixx="1e-7" ixy="0.0" ixz="0.0" iyy="1e-7" iyz="0.0" izz="1e-7"/>
+    </inertial>
+  </link>
+  <joint name="wire_link_2_joint_y" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="0.0" lower="-1.5708" upper="1.5708" velocity="100.0"/>
+    <dynamics damping="0.005"/>
+    <parent link="wire_dummy_2"/>
+    <child link="wire_link_2"/>
+  </joint>
+  <link name="wire_link_2">
+    <inertial>
+      <origin xyz="0 0 -0.034375"/>
+      <mass value="0.002500"/>
+      <inertia ixx="9.880e-07" ixy="0.0" ixz="0.0" iyy="9.880e-07" iyz="0.0" izz="6.667e-09"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 -0.034375"/>
+      <geometry><cylinder length="0.068750" radius="0.004"/></geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 -0.034375"/>
+      <geometry><cylinder length="0.068750" radius="0.004"/></geometry>
+    </collision>
+  </link>
+  <!-- wire node 3: spherical joint = revolute-X then revolute-Y through a massless dummy -->
+  <joint name="wire_link_3_joint_x" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 -0.068750"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="0.0" lower="-1.5708" upper="1.5708" velocity="100.0"/>
+    <dynamics damping="0.005"/>
+    <parent link="wire_link_2"/>
+    <child link="wire_dummy_3"/>
+  </joint>
+  <link name="wire_dummy_3">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="1e-4"/>
+      <inertia ixx="1e-7" ixy="0.0" ixz="0.0" iyy="1e-7" iyz="0.0" izz="1e-7"/>
+    </inertial>
+  </link>
+  <joint name="wire_link_3_joint_y" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="0.0" lower="-1.5708" upper="1.5708" velocity="100.0"/>
+    <dynamics damping="0.005"/>
+    <parent link="wire_dummy_3"/>
+    <child link="wire_link_3"/>
+  </joint>
+  <link name="wire_link_3">
+    <inertial>
+      <origin xyz="0 0 -0.034375"/>
+      <mass value="0.002500"/>
+      <inertia ixx="9.880e-07" ixy="0.0" ixz="0.0" iyy="9.880e-07" iyz="0.0" izz="6.667e-09"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 -0.034375"/>
+      <geometry><cylinder length="0.068750" radius="0.004"/></geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 -0.034375"/>
+      <geometry><cylinder length="0.068750" radius="0.004"/></geometry>
+    </collision>
+  </link>
+  <!-- wire node 4: spherical joint = revolute-X then revolute-Y through a massless dummy -->
+  <joint name="wire_link_4_joint_x" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 -0.068750"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="0.0" lower="-1.5708" upper="1.5708" velocity="100.0"/>
+    <dynamics damping="0.005"/>
+    <parent link="wire_link_3"/>
+    <child link="wire_dummy_4"/>
+  </joint>
+  <link name="wire_dummy_4">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="1e-4"/>
+      <inertia ixx="1e-7" ixy="0.0" ixz="0.0" iyy="1e-7" iyz="0.0" izz="1e-7"/>
+    </inertial>
+  </link>
+  <joint name="wire_link_4_joint_y" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="0.0" lower="-1.5708" upper="1.5708" velocity="100.0"/>
+    <dynamics damping="0.005"/>
+    <parent link="wire_dummy_4"/>
+    <child link="wire_link_4"/>
+  </joint>
+  <link name="wire_link_4">
+    <inertial>
+      <origin xyz="0 0 -0.034375"/>
+      <mass value="0.002500"/>
+      <inertia ixx="9.880e-07" ixy="0.0" ixz="0.0" iyy="9.880e-07" iyz="0.0" izz="6.667e-09"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 -0.034375"/>
+      <geometry><cylinder length="0.068750" radius="0.004"/></geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 -0.034375"/>
+      <geometry><cylinder length="0.068750" radius="0.004"/></geometry>
+    </collision>
+  </link>
+  <!-- wire node 5: spherical joint = revolute-X then revolute-Y through a massless dummy -->
+  <joint name="wire_link_5_joint_x" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 -0.068750"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="0.0" lower="-1.5708" upper="1.5708" velocity="100.0"/>
+    <dynamics damping="0.005"/>
+    <parent link="wire_link_4"/>
+    <child link="wire_dummy_5"/>
+  </joint>
+  <link name="wire_dummy_5">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="1e-4"/>
+      <inertia ixx="1e-7" ixy="0.0" ixz="0.0" iyy="1e-7" iyz="0.0" izz="1e-7"/>
+    </inertial>
+  </link>
+  <joint name="wire_link_5_joint_y" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="0.0" lower="-1.5708" upper="1.5708" velocity="100.0"/>
+    <dynamics damping="0.005"/>
+    <parent link="wire_dummy_5"/>
+    <child link="wire_link_5"/>
+  </joint>
+  <link name="wire_link_5">
+    <inertial>
+      <origin xyz="0 0 -0.034375"/>
+      <mass value="0.002500"/>
+      <inertia ixx="9.880e-07" ixy="0.0" ixz="0.0" iyy="9.880e-07" iyz="0.0" izz="6.667e-09"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 -0.034375"/>
+      <geometry><cylinder length="0.068750" radius="0.004"/></geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 -0.034375"/>
+      <geometry><cylinder length="0.068750" radius="0.004"/></geometry>
+    </collision>
+  </link>
+  <!-- wire node 6: spherical joint = revolute-X then revolute-Y through a massless dummy -->
+  <joint name="wire_link_6_joint_x" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 -0.068750"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="0.0" lower="-1.5708" upper="1.5708" velocity="100.0"/>
+    <dynamics damping="0.005"/>
+    <parent link="wire_link_5"/>
+    <child link="wire_dummy_6"/>
+  </joint>
+  <link name="wire_dummy_6">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="1e-4"/>
+      <inertia ixx="1e-7" ixy="0.0" ixz="0.0" iyy="1e-7" iyz="0.0" izz="1e-7"/>
+    </inertial>
+  </link>
+  <joint name="wire_link_6_joint_y" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="0.0" lower="-1.5708" upper="1.5708" velocity="100.0"/>
+    <dynamics damping="0.005"/>
+    <parent link="wire_dummy_6"/>
+    <child link="wire_link_6"/>
+  </joint>
+  <link name="wire_link_6">
+    <inertial>
+      <origin xyz="0 0 -0.034375"/>
+      <mass value="0.002500"/>
+      <inertia ixx="9.880e-07" ixy="0.0" ixz="0.0" iyy="9.880e-07" iyz="0.0" izz="6.667e-09"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 -0.034375"/>
+      <geometry><cylinder length="0.068750" radius="0.004"/></geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 -0.034375"/>
+      <geometry><cylinder length="0.068750" radius="0.004"/></geometry>
+    </collision>
+  </link>
+  <!-- wire node 7: spherical joint = revolute-X then revolute-Y through a massless dummy -->
+  <joint name="wire_link_7_joint_x" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 -0.068750"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="0.0" lower="-1.5708" upper="1.5708" velocity="100.0"/>
+    <dynamics damping="0.005"/>
+    <parent link="wire_link_6"/>
+    <child link="wire_dummy_7"/>
+  </joint>
+  <link name="wire_dummy_7">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="1e-4"/>
+      <inertia ixx="1e-7" ixy="0.0" ixz="0.0" iyy="1e-7" iyz="0.0" izz="1e-7"/>
+    </inertial>
+  </link>
+  <joint name="wire_link_7_joint_y" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="0.0" lower="-1.5708" upper="1.5708" velocity="100.0"/>
+    <dynamics damping="0.005"/>
+    <parent link="wire_dummy_7"/>
+    <child link="wire_link_7"/>
+  </joint>
+  <link name="wire_link_7">
+    <inertial>
+      <origin xyz="0 0 -0.034375"/>
+      <mass value="0.002500"/>
+      <inertia ixx="9.880e-07" ixy="0.0" ixz="0.0" iyy="9.880e-07" iyz="0.0" izz="6.667e-09"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 -0.034375"/>
+      <geometry><cylinder length="0.068750" radius="0.004"/></geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 -0.034375"/>
+      <geometry><cylinder length="0.068750" radius="0.004"/></geometry>
+    </collision>
+  </link>
+  <!-- lumped hook + weight tip -->
+  <joint name="hook_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0 -0.068750"/>
+    <parent link="wire_link_7"/>
+    <child link="hook_link"/>
+  </joint>
+  <link name="hook_link">
+    <inertial>
+      <origin xyz="0 0 -0.020000"/>
+      <mass value="0.030000"/>
+      <inertia ixx="4.800e-06" ixy="0.0" ixz="0.0" iyy="4.800e-06" iyz="0.0" izz="4.800e-06"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 -0.020000"/>
+      <geometry><sphere radius="0.02"/></geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 -0.020000"/>
+      <geometry><sphere radius="0.02"/></geometry>
+    </collision>
+  </link>
+
+</robot>

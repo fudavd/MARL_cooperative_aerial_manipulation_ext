@@ -675,15 +675,10 @@ class MARLHoverEnv(DirectMARLEnv):
             self.prev_actions[agent][env_ids] = 0.0
             self.actions[agent][env_ids] = 0.0
 
-        # if self.common_step_counter > self.cfg.range_curriculum_steps:
-        #     self.cfg.goal_range ={
-        #     "pos_x": (-2.0, 2.0),
-        #     "pos_y": (-2.0, 2.0),
-        #     "pos_z": (0.5, 2.5),
-        #     "roll": (-math.pi/4, math.pi/4),
-        #     "pitch": (-math.pi/4, math.pi/4),
-        #     "yaw": (-math.pi, math.pi),
-        # }
+        # reward/task scheduling: widen the goal range to the harder ranges once the
+        # curriculum kicks in (gated by cfg.range_curriculum; see marl_hover_env_cfg.py)
+        if self.cfg.range_curriculum and self.common_step_counter > self.cfg.range_curriculum_steps:
+            self.cfg.goal_range = self.cfg.goal_range_hard
 
     def _reset_target_pose(self, env_ids):
         # reset goal rotation

@@ -1,0 +1,42 @@
+# W&B sweep: PGPE-ONLY variant of sweep_big.yaml. A dedicated pgpe agent runs this so pgpe
+# is ranked pgpe-vs-pgpe (hyperband won't cull it for losing to openai_es) and the best
+# configs run full length -- a fair optimizer comparison vs the mixed sweep (ywv39wxa).
+# Init on the remote from /home/diggelen/AerialMan:
+#   .venv/bin/wandb sweep --project hebbian-flycrane scripts/hebbian/sweeps/sweep_big_pgpe.yaml
+program: scripts/hebbian/train.py
+method: bayes
+metric:
+  name: best_so_far
+  goal: maximize
+early_terminate:
+  type: hyperband
+  min_iter: 60                # culls only the worst pgpe configs (ranked vs other pgpe runs)
+parameters:
+  # optimizer fixed to pgpe in `command`; sweep the same axes as the mixed sweep minus es_*
+  popsize:                   {values: [256, 512, 1024]}
+  bound:                     {values: [1.0, 2.0, 5.0]}
+  hebbian_lr:                {values: [0.05, 0.1, 0.2]}
+  hebbian_update_interval:   {values: [1, 10, 50]}
+  keep_d:                    {values: [0, 1]}
+  reward_curriculum:         {values: [0, 1]}
+  pgpe_center_lr:            {values: [0.1, 0.2]}
+  pgpe_stdev_lr:             {values: [0.05, 0.1]}
+command:
+  - .venv/bin/python
+  - ${program}
+  - "--task=Isaac-flycrane-payload-decentralized-hovering-v0"
+  - "--headless"
+  - "--optimizer=pgpe"
+  - "--evolve_init_weights"
+  - "--weight_init_scale=0"
+  - "--n_repeats=8"
+  - "--history_len=1"
+  - "--sigma=0.3"
+  - "--pgpe_stdev_max_change=0.2"
+  - "--pgpe_ranking_method=centered"
+  - "--num_generations=400"
+  - "--max_hours=8"
+  - "--seed=2"
+  - "--wandb"
+  - "--wandb_project=hebbian-flycrane"
+  - ${args_no_boolean_flags}

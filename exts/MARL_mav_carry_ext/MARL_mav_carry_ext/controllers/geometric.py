@@ -41,6 +41,12 @@ class GeometricController:
 
         # sim and drone parameters
         self.gravity = torch.tensor([[0.0, 0.0, -9.8066]] * self.num_envs, device=self.device)
+        # Per-env gain on the estimated load-acceleration feed-forward (acc_load). 1.0 = full load
+        # compensation (default; used by the carry/hover task). Set to 0 to ignore the load — useful for a
+        # free-flying drone with a light suspended wire, where the acc_load estimate otherwise cancels the
+        # drone's own commanded lateral acceleration (sluggish maneuvers). The hook-grasp env gates this by
+        # attachment: 0 while free-flying/swinging, 1 once hooked to the wall (real sustained load).
+        self.load_comp_gain = torch.ones(self.num_envs, 1, device=self.device)
         self.z_i = torch.tensor([[0.0, 0.0, 1.0]] * self.num_envs, device=self.device)
         self.falcon_mass = 0.6017  # kg
         self._epsilon = torch.tensor(1e-6, device=self.device)  # avoid division by zero
@@ -162,6 +168,9 @@ class GeometricController:
         acc_load = (
             state["lin_acc"] - self.gravity - quat_rotate(state["quat"], current_collective_thrust / self.falcon_mass)
         )
+        # gate the load feed-forward per env (see load_comp_gain). Applied here so BOTH the geometric
+        # acc_cmd below and the INDI inner loop (which receives acc_load) see the same gated value.
+        acc_load = self.load_comp_gain * acc_load
 
         if self.debug:
             self.acc_load_debug = acc_load

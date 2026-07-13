@@ -1,0 +1,48 @@
+# W&B sweep: expanded Hebbian search over optimizer, plasticity timescale, D-term,
+# reward scheduling, ABC(D) learning rate, genome bound and (bigger) population size.
+# Init on the remote from /home/diggelen/AerialMan:
+#   .venv/bin/wandb sweep --project hebbian-flycrane scripts/hebbian/sweeps/sweep_big.yaml
+# then run agents (each runs --count configs sequentially; keep concurrency low so each
+# config gets real compute -- 1024*8 = 8192 envs ~= 6.5 GB/proc):
+#   .venv/bin/wandb agent <ENTITY/PROJECT/SWEEP_ID>
+program: scripts/hebbian/train.py
+method: bayes                 # efficient over this large, heterogeneous space
+metric:
+  name: best_so_far
+  goal: maximize
+early_terminate:
+  type: hyperband             # kill clearly-losing configs early...
+  min_iter: 60                # ...but only after 60 gens, so each config is fairly assessed
+parameters:
+  # --- core search axes requested ---
+  optimizer:                 {values: [pgpe, openai_es]}     # + openai_es alongside pgpe
+  popsize:                   {values: [256, 512, 1024]}      # bigger populations added
+  bound:                     {values: [1.0, 2.0, 5.0]}       # genome "param size" up to +-5
+  hebbian_lr:                {values: [0.05, 0.1, 0.2]}      # ABC(D) online learning rate
+  hebbian_update_interval:   {values: [1, 10, 50]}           # plasticity horizon (1/10/50 steps)
+  keep_d:                    {values: [0, 1]}                # with / without the D term
+  reward_curriculum:         {values: [0, 1]}                # task/reward scheduling on / off
+  # --- optimizer-specific (ignored by the other optimizer; bayes learns this) ---
+  pgpe_center_lr:            {values: [0.1, 0.2]}
+  pgpe_stdev_lr:             {values: [0.05, 0.1]}
+  es_sigma:                  {values: [0.1, 0.2]}
+  es_lr:                     {values: [0.02, 0.05]}
+# fixed flags appended in `command` (store_true / constants don't go under parameters)
+command:
+  - .venv/bin/python
+  - ${program}
+  - "--task=Isaac-flycrane-payload-decentralized-hovering-v0"
+  - "--headless"
+  - "--evolve_init_weights"      # genome always includes the evolved init-weights block (+W)
+  - "--weight_init_scale=0"
+  - "--n_repeats=8"
+  - "--history_len=1"
+  - "--sigma=0.3"
+  - "--pgpe_stdev_max_change=0.2"
+  - "--pgpe_ranking_method=centered"
+  - "--num_generations=400"      # high ceiling; wall-clock is bounded by --max_hours
+  - "--max_hours=8"              # each config trains up to 8 h before stopping
+  - "--seed=2"
+  - "--wandb"
+  - "--wandb_project=hebbian-flycrane"
+  - ${args_no_boolean_flags}
