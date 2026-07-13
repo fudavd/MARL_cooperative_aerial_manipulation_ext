@@ -70,8 +70,12 @@ Decision at ~100k steps (~1h): `eval_goals.py` each; keep the 1-2 best config di
 - **F peak@107.5k (honest): catch 0.101 / hold 0.495** (hold varies 50-58% across peak region). Best HONEST hold. std=-0.5 peaked LATE (107k) = more stable than J's -0.7.
 - **CONCLUSION: honest recipe = easy catch base (radius 0.13, alive=1) + LOW exploration (max_log_std=-0.5, NOT -0.7) + hold rewards. NO detach override.** Also: universal peak-then-collapse (arms peak 40-110k then decline) -> lower std delays the peak; must eval at peak.
 
-### Wave 4 (RUNNING)
-- **K — honest combo** (LOCAL): COMMON + EASY(alive=1,prox=2,spawn=0.35,radius=0.13) + HOLD(tension=10,lock=10,progress=20) + max_log_std=-0.5. NO sticky. The honest C-catch + F-hold + hold-reward combine. Arm to beat.
+### Wave 4-5 (RUNNING)
+- **H holdreward eval @87.5k (honest): catch 0.069 / hold 0.352** — hold-reward boost (tension/lock/progress) HURT: worse hold than baseline AND lower catch. **=> hold-rewards do NOT help; the lever is exploration, not reward magnitude.** Killed H.
+- **K — combo** (LOCAL): C-base + max_log_std=-0.5 + HOLD(tension=10,lock=10,progress=20). Now a LESS-preferred bet (has hold-rewards which H showed hurt); keep as K-vs-L A/B datapoint.
+- **L — low-explore ONLY** (ALC): C-base(alive=1,prox=2,spawn=0.35,radius=0.13) + max_log_std=-0.5, NO hold-reward, NO sticky. **The clean winning recipe** — should give ~40% catch + ~55% hold.
+
+**REMAINING BLOCKER: hold ceiling ~58% (F) << 80% goal, AND universal peak-then-collapse.** Hypothesis for collapse: hold_curriculum ramps hold_req 30->100 over 150k; as the milestone outpaces the policy, success/progress signal vanishes -> unlearns catch (C peaked ~125k near curriculum end). Wave 6 idea: slower/capped hold curriculum + tighter KL (kl_threshold 0.008->0.004) / lower LR to prevent lurching -> higher, later peak -> better hold. NEXT WAKE: verify collapse-vs-hold_curriculum timing; eval K & L at peak.
 
 ### Wave 2 (RUNNING) — attack the HOLD gap, on C's proven easy base (spawn=0.35, radius=0.13, alive=1, prox=2)
 - **G — sticky hook** (ALC): `attachment.slack_dwell_steps=15 detach_p_vertical=0.5 detach_p_horizontal=0.1 slack_margin=0.05`. Forgiving detach so brief tension dips don't drop the hook -> policy can practise the hold.
