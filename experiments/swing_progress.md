@@ -30,6 +30,10 @@ Configs on the C recipe. New physics default: `require_upsweep=True`, `swing_ass
 | Q3 | ALC | assist2.2, gate0.08, slow-decay | — | — | — | — | — | early, af~0.06 |
 
 ## Improvement log (newest first)
+- **2026-07-15 ~01:25 — ⚠️ KEY REFRAME: training attached_frac was EXPLORATION NOISE, not learned skill.** P3@55k DETERMINISTIC eval: **catch 0.0007** (≈0!) vs training af 0.125. diag_catch: only 5 catches, but they ARE up-sweeps (v_up +0.22, 60% up-sweep, 0% creep) with swing amplitude **1.3 m ≫ 0.55 m wire** = wild flailing. Root cause: the ALC regime `max_log_std=2.0` (std→7.4) + entropy 0.005 keeps the policy CHAOTIC — it catches by luck in training, but the mean/deterministic policy hasn't learned a controlled swing. The up-sweep-required catch + assist are working (catches are real up-sweeps), but exploration is too high to converge to a repeatable maneuver.
+  - **PIVOT: strong assist (2.2, gate0.08) + MODERATE exploration** (assist provides structured exploration; low action-noise → learnable controlled swing). Killing the chaos-regime arms; launching R-wave bracketing max_log_std ∈ {-0.5, 0.0, 0.5} + low-entropy + strong up-sweep reward, all on assist2.2/gate0.08.
+  - **Eval rule going forward: judge by DETERMINISTIC catch (eval_goals), NOT training attached_frac** (the latter is inflated by exploration noise in the high-std regime).
+
 - **2026-07-15 ~00:05** — First read (~35-40k steps, training attached_frac, NOT yet eval'd). Under the up-sweep-required model **every catch is a genuine up-sweep by construction** (creep p=0), so attached_frac here already = physical catches.
   - **WINNER direction: strong swing-assist + EASY up-sweep gate.** P3 (assist2.2, upsweep_min0.08) attached_frac peak **0.099**, sustained ~0.05 & climbing. All weak/hard-gate arms collapse to ~0: P1 base 0.07→0.01, P2 up_w16 0.046→0.006, P4 (up_w16+assist2.2 but DEFAULT gate 0.12) 0.058→0.014, P5 base(local) →0.000.
   - Signal: the **0.08 up-sweep gate** matters as much as assist strength (P4 has assist2.2 but the 0.12 gate → collapses; P3 with 0.08 → sustains). base assist 1.3 cannot bootstrap.
