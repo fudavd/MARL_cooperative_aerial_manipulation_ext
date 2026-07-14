@@ -15,7 +15,15 @@
 | 123 (S2)| ~0 / - (FAILED to learn catch) | - |
 => Recipe reliably learns a strong CATCH (2/3 seeds: 0.41, 0.51) but is **seed-sensitive** (1/3 failed) and the catch-vs-hold split varies. **C(seed42) is the best balanced run and the ONLY one clearing 80% hold under relaxed detach — it remains the deliverable.** S(seed7) is a higher-catch alternative (0.48) that just misses hold (0.77). Practical takeaway: train 2-3 seeds and keep the best; or (option 3) LSTM for robustness.
 
-**STATUS: investigation COMPLETE. Loop stopped ~03:40 Jul14. All training arms killed, GPUs freed.**
+**STATUS (superseded): loop stopped ~03:40, then RESUMED after a user-spotted behaviour bug — see below.**
+
+## ⭐⭐ REWARD-FIX PHASE (user-driven) — pursuing STRICT-detach 80% honestly
+User watched the video and asked "when it attaches does it pull toward the wall?" Diagnostic (`scripts/hook_grasp/diag_hold.py`, C, 189k attached steps) found the HOLD is fragile BY REWARD DESIGN:
+- drone->attach dist mean **0.583m** (taut=0.520) -- only marginally taut; **slack 19% of steps**; wall-normal vel ~**0** (frac moving INTO wall **50%**); wall penetration ~0 (NOT slamming); tension **49N vs ref 30N => tension reward SATURATED (always 1.0) => zero gradient to keep margin.**
+- Root cause: once attached, BOTH hold rewards (lock const, tension saturated) are FLAT -> nothing rewards pulling away / keeping a taut margin, so the drone loiters at the slack edge and drifts into the wall (jerk).
+**FIX (in env, strict detach kept):** (1) replaced saturated pin-force tension with a **TAUT-MARGIN** reward = `tension_weight * clamp((dist_drone_attach - taut_thr)/taut_margin_target, 0,1)` (taut_thr=0.52, target=0.05 -> peak ~0.57m); (2) new **anti-pull-to-wall** penalty `-wall_pull_weight * clamp(-v_drone_normal,0)` while attached (discourages into-wall motion = user's unrealistic-jerk concern). New cfg: `taut_margin_target=0.05`, `wall_pull_weight=8.0`. New reward-log key `wall_pull`.
+**Arms (C recipe + new rewards, STRICT detach, from scratch):** T(LOCAL, defaults, seed42) | T2(ALC, wall_pull_weight=15, seed7) | T3(ALC, taut_margin_target=0.09, seed11). Hypothesis: a real taut-hold gradient lifts STRICT hold above 46% toward 80% AND removes the toward-wall jerk.
+NEXT: eval at peak under STRICT detach (radius 0.13); re-run diag_hold.py to confirm the drone now pulls AWAY (dist>0.57, frac-into-wall down, slack down). If hold jumps -> this was the real fix; iterate weights.
 
 
 **Goal:** catch>=0.30 AND hold(|caught)>=0.80 @100 steps.

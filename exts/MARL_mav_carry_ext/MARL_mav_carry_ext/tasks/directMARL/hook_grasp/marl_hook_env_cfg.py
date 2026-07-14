@@ -292,8 +292,15 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
     lock_weight = 6.0            # per-step reward while attached ("locked on" = hooked)
     # tension: while LOCKED, reward wire tension (the drone actively pulling the wire taut). Proxy = the pin
     # force magnitude the wire transmits to the hook (see _compute_hook_pin_force), normalized by tension_ref.
-    tension_weight = 5.0
-    tension_ref = 30.0           # N; pin-force magnitude that saturates the tension reward
+    tension_weight = 5.0         # NOW weights the TAUT-MARGIN reward (see marl_hook_env _get_rewards): reward for
+                                 # keeping drone->attach distance a safe margin ABOVE the slack threshold, i.e.
+                                 # holding the wire firmly taut / pulling AWAY from the wall (not the saturated
+                                 # raw pin-force it used to be, which gave no gradient and let the drone loiter slack).
+    tension_ref = 30.0           # N; (legacy) pin-force magnitude -- no longer used by the taut-margin reward
+    taut_margin_target = 0.05    # m; taut reward ramps 0->1 over [taut_thr, taut_thr+this] (taut_thr=wire-slack_margin
+                                 # =0.52). Peak ~0.57m = comfortably taut (wire 0.55), 0 at the 0.52 slack edge.
+    wall_pull_weight = 8.0       # penalty on the drone's INTO-wall velocity while attached: discourages pulling
+                                 # toward the wall (goes slack + unrealistic jerk through the stiff pin).
 
     # --- survival economics (fixes the "suicidal agent": net-negative living + free death -> crash on purpose) ---
     alive_weight = 5.0           # + EVERY step the episode continues (alive_weight * dt) -> baseline living is

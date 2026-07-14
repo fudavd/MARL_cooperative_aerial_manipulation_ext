@@ -181,7 +181,7 @@ class MARLHookGraspEnv(DirectMARLEnv):
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
                 "approach", "proximity", "impact_perp", "impact_up",
-                "catch", "success", "alive", "death", "lock", "tension", "progress", "detach",
+                "catch", "success", "alive", "death", "lock", "tension", "wall_pull", "progress", "detach",
                 "action_smoothness", "body_rate_penalty", "force_penalty", "downwash", "swing_limit",
             ]
         }
@@ -605,6 +605,7 @@ class MARLHookGraspEnv(DirectMARLEnv):
         impact_up = torch.zeros(self.num_envs, device=self.device)
         lock = torch.zeros(self.num_envs, device=self.device)
         tension = torch.zeros(self.num_envs, device=self.device)
+        wall_pull = torch.zeros(self.num_envs, device=self.device)
         progress = torch.zeros(self.num_envs, device=self.device)
         swing_limit = torch.zeros(self.num_envs, device=self.device)
         for i in range(self._num_drones):
@@ -669,12 +670,25 @@ class MARLHookGraspEnv(DirectMARLEnv):
 
             # --- locking: reward staying locked (attached) --------------------------------
             lock += self.cfg.lock_weight * attached.float()
-            # --- tension: while LOCKED, reward the wire tension the drone pulls with -------
+            # --- taut hold: reward keeping the wire SAFELY TAUT -- the drone->attach-point distance kept a
+            # comfortable margin ABOVE the slack threshold (taut_thr = wire_length - slack_margin). The OLD reward
+            # used raw pin-force magnitude, which SATURATES (|pin| ~49N vs ref 30N -> always 1.0), giving ZERO
+            # gradient: the drone loitered right at the slack edge (~0.583m, slack 19% of steps) instead of pulling
+            # away. This ramps 0->1 over [taut_thr, taut_thr + taut_margin_target], so slack pays 0 and a firm taut
+            # hold pays full -> a real gradient to pull AWAY from the wall and hold steady. (key kept as "tension".)
+            taut_thr = self._acfg.wire_length - self._acfg.slack_margin
+            dist_da = torch.norm(self.drone_positions[:, i] - self.attach_point_w[:, i], dim=-1)
             tension += (
                 self.cfg.tension_weight
-                * (self._hook_tension[:, i] / self.cfg.tension_ref).clamp(0.0, 1.0)
+                * ((dist_da - taut_thr) / self.cfg.taut_margin_target).clamp(0.0, 1.0)
                 * attached.float()
             )
+            # --- anti-pull-to-wall: while attached, PENALIZE the drone moving INTO the wall (toward the anchor).
+            # Pulling toward the wall both goes slack AND yanks the stiff pin -> unrealistic jerk on the drone.
+            # Only the into-wall velocity component is penalized; holding still or pulling away is free. Gated to
+            # ATTACHED so the catch approach can still move toward the wall.
+            v_drone_normal = (self.drone_linear_velocities[:, i] * wall_normal).sum(-1)   # + = away, - = into wall
+            wall_pull += self.cfg.wall_pull_weight * torch.clamp(-v_drone_normal, min=0.0) * attached.float()
             # --- progress: dense "percentage toward success" = hold_counter / hold_req in [0,1]. Ramps UP each
             # held step and drops to 0 the instant the hook is lost (hold_counter resets in _update_attachment).
             progress += (self.hold_counter[:, i].float() / max(1, self._current_hold_req)).clamp(0.0, 1.0)
@@ -690,7 +704,8 @@ class MARLHookGraspEnv(DirectMARLEnv):
         r_impact_perp = impact_perp * dt
         r_impact_up = impact_up * dt
         r_lock = lock * dt
-        r_tension = tension * dt
+        r_tension = tension * dt                                # now a TAUT-MARGIN reward (see loop)
+        r_wall_pull = -wall_pull * dt                           # penalty for pulling INTO the wall while attached
         r_progress = self.cfg.progress_weight * progress * dt   # "percentage toward success" per step (resets on loss)
         r_swing_limit = -swing_limit * dt
 
@@ -737,7 +752,7 @@ class MARLHookGraspEnv(DirectMARLEnv):
             "impact_perp": r_impact_perp, "impact_up": r_impact_up,
             "catch": r_catch, "detach": r_detach, "success": r_success,
             "alive": r_alive, "death": r_death,
-            "lock": r_lock, "tension": r_tension, "progress": r_progress,
+            "lock": r_lock, "tension": r_tension, "wall_pull": r_wall_pull, "progress": r_progress,
             "action_smoothness": r_smooth, "body_rate_penalty": r_body_rate, "force_penalty": r_effort,
             "downwash": r_downwash, "swing_limit": r_swing_limit,
         }
