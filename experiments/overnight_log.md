@@ -53,6 +53,21 @@ Diag showed wall_pull added little (into-wall frac still ~0.49) while risking ca
 Hypothesis: dropping wall_pull recovers C-level catch (~0.41) while keeping the taut-margin jerk fix. If catch recovers → best-of-both deliverable (jerk-free hold + high catch). If catch still low → the taut reward itself perturbs catch, and the honest deliverable is C (old reward, 0.41/0.46) + the option-2 detach decision for 80%.
 NEXT: eval V peaks under strict at ~100-125k; compare catch to C's 0.41 and re-run diag_hold to confirm jerk stays fixed.
 
+### V-WAVE VERDICT — dropping wall_pull did NOT recover catch → the TAUT-MARGIN reward itself is the cost
+attached_frac peaks: **V(s42)=0.074@78k · V2(s123)=0.067@73k · V3 full-strength(s7)=0.055@54k** — all LOW again, same as U-wave. So wall_pull was NOT the catch-killer; the taut-margin hold reward itself depresses catch, in every variant tried.
+
+### 🔑 DEFINITIVE TRADEOFF (robust across 6 arms / 3 waves / multiple seeds & weights):
+- **C (old saturated tension reward):** catch **0.41**, hold 0.46 strict — but JERKY hold (pulls into wall, slack 19%, tension 49N).
+- **Taut-margin reward (T/U/V, any weight/margin/pull):** CLEAN jerk-free hold (slack 2%, tension 22N) — but catch drops to ~0.15-0.20 (attached_frac 0.055-0.12) and collapses ~2× earlier.
+- **You cannot get both C-level catch AND jerk-free hold with this reward design.** The taut gradient that keeps the wire taut also pulls the policy away from the aggressive close approach that catching needs.
+- Killed all V arms (past peak, peak-then-collapse never recovers — good cluster stewardship). Exploration of the taut-margin reward family is CONVERGED; more seeds won't break the tradeoff.
+
+### DELIVERABLE STATE (for user decision — reward-fix phase concluded):
+1. **Best CATCH:** C (0.41/0.46 strict) — jerky hold you flagged.
+2. **Best jerk-free HOLD:** taut-margin policies (e.g. T3 0.07/0.52) — clean hold, ~half the catch.
+3. **80% strict hold:** still blocked by detach `pv=1.0` — needs option-2 mild detach softening (your call) regardless of reward.
+Recommendation: keep the taut-margin reward in the env (it genuinely removes the unrealistic jerk you objected to) and accept the catch cost, OR revert to C's reward if catch matters more than jerk. This is a genuine physics/objective tradeoff, yours to weigh. (V peak strict eval numbers appended below to quantify option 2.)
+
 
 **Goal:** catch>=0.30 AND hold(|caught)>=0.80 @100 steps.
 - **CATCH: SOLVED.** Best policy **C** (from-scratch, easy base radius 0.13, alive=1) = **catch 0.41** (>=0.30 ✓). Checkpoint saved (experiments/best_checkpoints/v22C_easy_125k_*.pt).
