@@ -42,6 +42,17 @@ NEXT: eval at peak under STRICT detach (radius 0.13); re-run diag_hold.py to con
 - **U**  (LOCAL, seed 42) · **U2** (ALC, seed 123) · **U3** (ALC, seed 7). Goal: a seed that survives to C-level catch (~125k) while keeping the 0.52+ taut-hold. Backups: `experiments/best_checkpoints/v22T3_widetaut_67.5k_*.pt`.
 NEXT: watch for a survivor past ~100k; eval peak under strict; if catch≥0.30 with hold≥0.50 the fix compounds; still the strict pv=1.0 ceiling looms for the 0.80 target (option-2 detach softening remains the honest route to 80%).
 
+### U-WAVE VERDICT — wide-taut+gentle-pull does NOT preserve catch (3/3 seeds collapse low)
+attached_frac peaks (training metric): **U(s42)=0.091@61k · U2(s123)=0.074@70k · U3(s7)=0.058@56k** — all collapsed EARLY (56-70k) at LOW peaks (vs C ~0.15-0.2 @125k). Consistent 3-seed signal: the new taut+pull rewards trade away catch/stability. Not worth running to 750k (peak-then-collapse never recovers). Killed all three.
+
+### V-WAVE (launched) — isolate the catch-killer: DROP wall_pull, keep only the taut-margin jerk-fix
+Diag showed wall_pull added little (into-wall frac still ~0.49) while risking catch; taut-margin alone did the real jerk fix (slack 19→2%, tension 49→22N). So test the MINIMAL perturbation:
+- **V**  (LOCAL, s42):  tension_weight=3, taut_margin=0.05, **wall_pull=0**  (gentle taut, no pull)
+- **V2** (ALC, s123):   same as V (gentle taut, no pull)
+- **V3** (ALC, s7):     tension_weight=**5**, taut_margin=0.05, **wall_pull=0**  (full taut strength, no pull) → isolates whether wall_pull was the catch-killer
+Hypothesis: dropping wall_pull recovers C-level catch (~0.41) while keeping the taut-margin jerk fix. If catch recovers → best-of-both deliverable (jerk-free hold + high catch). If catch still low → the taut reward itself perturbs catch, and the honest deliverable is C (old reward, 0.41/0.46) + the option-2 detach decision for 80%.
+NEXT: eval V peaks under strict at ~100-125k; compare catch to C's 0.41 and re-run diag_hold to confirm jerk stays fixed.
+
 
 **Goal:** catch>=0.30 AND hold(|caught)>=0.80 @100 steps.
 - **CATCH: SOLVED.** Best policy **C** (from-scratch, easy base radius 0.13, alive=1) = **catch 0.41** (>=0.30 ✓). Checkpoint saved (experiments/best_checkpoints/v22C_easy_125k_*.pt).
