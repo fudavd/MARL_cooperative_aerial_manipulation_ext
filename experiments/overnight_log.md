@@ -101,6 +101,14 @@ NEXT: watch `Metrics/attached_frac` for a peak that survives longer/higher than 
 - The spawn fix RAISED the whole bracket vs the old buggy numbers (relaxed 0.82→0.85 hold, catch 0.36→0.55). **RELAXED detach clears both goals with the EXISTING C policy — no retraining.** MILD (0.68) misses 0.80; the mildest 80%-clearing point is ~pv 0.4-0.5 (not yet pinpointed — one eval would nail it if user picks option 2).
 - **DELIVERABLE STATE for user decision:** (1) accept STRICT best (catch 0.58 / hold 0.47); (2) soften detach — RELAXED already meets both goals, or pinpoint the mildest pv that clears 80%; (3) LSTM+old-reward for higher catch (won't fix hold). 80% is a detach-model choice, the user's call.
 
+## ⭐⭐⭐⭐ PHYSICAL-SWING PHASE (2026-07-14, 12h autonomous; user: "make it work for a REAL drone; don't let it creep, learn the SWING")
+Requirements UNCHANGED (catch>=0.30, hold>=0.80). User's concern: the drone finds the unphysical "slowly creep the dangling hook into the zone" optimum instead of pumping a pendulum swing. **CONFIRMED quantitatively** via new `diag_catch.py` on C: at the catch instant v_up≈0 (mean -0.001), only 10.8% genuine up-sweeps, 71% creep-like, catches by horizontal into-wall closing (v_into 0.55 ≫ v_up). A real J-hook CANNOT catch this way — its throat must RISE onto the bar.
+**Root cause (attachment.py):** `direction_factor` gave v_up=0 a catch prob of ~0.46 (midpoint) and speed_factor=1 for slow motion → creep catches ~0.46/try.
+**FIXES (all config-gated, committed):**
+1. **Up-sweep-REQUIRED catch** (`attachment.require_upsweep=True`): v_up≤0 → ~p_min (can't catch), ramps to p_max at v_ref; contact also gated on `v_up > upsweep_v_min` (0.12). Kills creep at the source. Tests 7/7 (creep→0, up-sweep→0.9). Legacy path kept.
+2. **Reverse swing-phase curriculum** (`swing_assist_curriculum`): reset gives the drone a decaying toward-wall+up velocity (`swing_assist_v0=1.3`, ×(1-frac)) so the pendulum up-sweeps onto the bar early (assisted catches → learns "up-sweep→catch"), fading so it must self-generate the pump. EVAL-SAFE (frac=1 → 0 assist).
+3. **diag_catch.py**: swing-vs-creep classifier (v_up + swing amplitude at catch); validated (reads C as creep).
+**P-WAVE launched (MLP, C recipe + new physics, STRICT detach):** P1 base(s42) · P2 impact_up=16(s7) · P3 assist=2.2+upsweep_min=0.08(s123) · P4 both(s99) [ALC] · P5 base(s7)[local]. Success = catch>=0.30 with diag_catch showing GENUINE up-sweeps (v_up>0.2, most catches up-sweep), then hold. NEXT: eval peaks with eval_goals (goals) + diag_catch (physicality).
 
 **Goal:** catch>=0.30 AND hold(|caught)>=0.80 @100 steps.
 - **CATCH: SOLVED.** Best policy **C** (from-scratch, easy base radius 0.13, alive=1) = **catch 0.41** (>=0.30 ✓). Checkpoint saved (experiments/best_checkpoints/v22C_easy_125k_*.pt).
