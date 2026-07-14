@@ -68,6 +68,13 @@ attached_frac peaks: **V(s42)=0.074@78k · V2(s123)=0.067@73k · V3 full-strengt
 3. **80% strict hold:** still blocked by detach `pv=1.0` — needs option-2 mild detach softening (your call) regardless of reward.
 Recommendation: keep the taut-margin reward in the env (it genuinely removes the unrealistic jerk you objected to) and accept the catch cost, OR revert to C's reward if catch matters more than jerk. This is a genuine physics/objective tradeoff, yours to weigh. (V peak strict eval numbers appended below to quantify option 2.)
 
+## ⭐⭐⭐ LSTM PHASE (option 3, user go-ahead 2026-07-14: "if impossible try the lstm. use the ALC")
+Since 80% strict hold is unreachable with the MLP (ceiling ~46-58% over ~20 arms, set by detach pv=1.0), building a RECURRENT policy — memory over the pendulum swing phase is what an MLP can't exploit; the flagged best shot at 80% under strict detach.
+- **Impl:** new `scripts/skrl/train_lstm.py` = skrl **PPO_RNN** + custom LSTM `GaussianMixin` policy / `DeterministicMixin` value (adapted verbatim from `thirdparty/skrl/docs/source/examples/gymnasium/torch_gymnasium_pendulumnovel_ppo_lstm.py`; tanh action-scaling removed). Built manually (yaml Runner can't make RNNs). C recipe baked in (capture_radius 0.13, alive 1, proximity 2, spawn_dist_mu 0.35, hold_success_steps 100), `state_as_observation=True` so the recurrent ACTOR sees the hook. Hyperparams mirror skrl_ppo_cfg.yaml (rollouts 32, lr 1e-3, KLAdaptiveLR kl 0.008, entropy 0.003, min/max_log_std -3/0). Smoke-tested locally (full PPO_RNN update, no traceback).
+- **BUGFIX (metric logging):** first launch logged only reward scalars — cfg_trainer was missing `environment_info="log"` (skrl default "episode" ≠ our env's extras["log"]), so `Metrics/attached_frac`/`Episode_*` were invisible. Fixed + relaunched; TB now has all 48 tags. Needed to find the PEAK ckpt over the ~14h run.
+- **Arms (ALC, 128 envs, STRICT detach):** **L1** h256/seq16 seed42 · **L2** h256/seq32 seed7 (longer swing memory window) · **L3** h128/seq16 seed123. ~15 it/s (BPTT slower than MLP ~25). Peak window ~60-150k (~1.5-3h).
+NEXT: watch `Metrics/attached_frac` for a peak that survives longer/higher than the MLP's; eval peak ckpts under STRICT detach via eval_goals.py; the win condition is hold(|caught) climbing toward 0.80 at catch>=0.30 — if recurrence can't beat the MLP's ~46-58% strict ceiling either, then 80% genuinely requires option-2 detach softening.
+
 
 **Goal:** catch>=0.30 AND hold(|caught)>=0.80 @100 steps.
 - **CATCH: SOLVED.** Best policy **C** (from-scratch, easy base radius 0.13, alive=1) = **catch 0.41** (>=0.30 ✓). Checkpoint saved (experiments/best_checkpoints/v22C_easy_125k_*.pt).
