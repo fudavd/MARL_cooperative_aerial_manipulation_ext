@@ -350,7 +350,12 @@ def main():
     )
 
     # configure and instantiate the RL trainer
-    cfg_trainer = {"timesteps": timesteps, "headless": True, "close_environment_at_exit": False}
+    # NOTE: environment_info="log" is REQUIRED so the SequentialTrainer surfaces the env's
+    # extras["log"] dict (Metrics/attached_frac, Episode_Reward/*, Episode_Termination/*) to
+    # TensorBoard. The skrl default is "episode", which our env does not populate -> without this
+    # only reward scalars are logged and the peak-then-collapse attached_frac curve is invisible.
+    cfg_trainer = {"timesteps": timesteps, "headless": True, "close_environment_at_exit": False,
+                   "environment_info": "log"}
     trainer = SequentialTrainer(cfg=cfg_trainer, env=env, agents=[agent])
 
     # start training
