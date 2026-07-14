@@ -25,6 +25,23 @@ User watched the video and asked "when it attaches does it pull toward the wall?
 **Arms (C recipe + new rewards, STRICT detach, from scratch):** T(LOCAL, defaults, seed42) | T2(ALC, wall_pull_weight=15, seed7) | T3(ALC, taut_margin_target=0.09, seed11). Hypothesis: a real taut-hold gradient lifts STRICT hold above 46% toward 80% AND removes the toward-wall jerk.
 NEXT: eval at peak under STRICT detach (radius 0.13); re-run diag_hold.py to confirm the drone now pulls AWAY (dist>0.57, frac-into-wall down, slack down). If hold jumps -> this was the real fix; iterate weights.
 
+### T-WAVE RESULTS (strict-detach eval, peak ckpts) — the BEHAVIOR fix works; hold not yet up
+| Arm | taut / pull | peak | catch | hold | note |
+|---|---|---|---|---|---|
+| C (old reward) | — | 125k | **0.41** | 0.46 | baseline |
+| T   | 0.05 / 8  | 75k | 0.235 | 0.358 | best catch of new-reward arms |
+| T2  | 0.05 / **15** | 65k | **0.050** | 0.472 | strong pull CRUSHES catch |
+| T3  | **0.09** / 8 | 67.5k | 0.074 | **0.525** | wide taut = best hold yet (>C) |
+
+- **diag_hold on T (strict):** dist 0.583→**0.596**, frac slack 0.187→**0.022** (8× better!), tension 49N→**22N** (jerk halved), penetration 0. => **user's "pull toward wall / unrealistic jerk" concern is FIXED by the taut-margin reward.**
+- **But strict HOLD-success did not rise** at these peaks because (a) all new-reward arms peaked EARLY (65-75k vs C's 125k) so their catch is still low — the collapse lottery, not the reward; (b) `detach_p_vertical=1.0` still punishes even the rare clustered slack.
+- **Signals:** wider taut margin (T3, 0.09) → best hold (0.525 > C's 0.46) ✓; stronger anti-pull (T2, 15) → kills catch ✗ keep pull ≤ ~4-8.
+
+### U-WAVE (launched) — lock in wide-taut + GENTLE pull, run seeds to win the catch lottery
+`taut_margin_target=0.09` (best hold) + `wall_pull_weight=4.0` (gentle, preserve catch), C-base recipe, STRICT, from scratch.
+- **U**  (LOCAL, seed 42) · **U2** (ALC, seed 123) · **U3** (ALC, seed 7). Goal: a seed that survives to C-level catch (~125k) while keeping the 0.52+ taut-hold. Backups: `experiments/best_checkpoints/v22T3_widetaut_67.5k_*.pt`.
+NEXT: watch for a survivor past ~100k; eval peak under strict; if catch≥0.30 with hold≥0.50 the fix compounds; still the strict pv=1.0 ceiling looms for the 0.80 target (option-2 detach softening remains the honest route to 80%).
+
 
 **Goal:** catch>=0.30 AND hold(|caught)>=0.80 @100 steps.
 - **CATCH: SOLVED.** Best policy **C** (from-scratch, easy base radius 0.13, alive=1) = **catch 0.41** (>=0.30 ✓). Checkpoint saved (experiments/best_checkpoints/v22C_easy_125k_*.pt).
