@@ -20,11 +20,14 @@ Configs on the C recipe. New physics default: `require_upsweep=True`, `swing_ass
 |---|---|---|---|---|---|---|---|---|
 | P1 | ALC | base (assist1.3, up_w8) | — | — | — | — | — | training |
 | P2 | ALC | impact_up_weight=16 | — | — | — | — | — | training |
-| P3 | ALC | assist2.2, upsweep_min0.08 | — | — | — | — | — | training |
-| P4 | ALC | up_w16 + assist2.2 | — | — | — | — | — | training |
-| P5 | local | base (seed7) | — | — | — | — | — | training |
-| P6 | ALC | assist3.0, upsweep_min0.08 | — | — | — | — | — | training |
-| P7 | ALC | impact_up_weight=24 | — | — | — | — | — | training |
+| P3 | ALC | assist2.2, upsweep_min0.08 | 55k+ | eval running | — | — | — | **WINNER: af 0.125 & climbing** |
+| P4 | ALC | up_w16 + assist2.2 (gate0.12) | — | — | — | — | — | collapsing (af→0.017) |
+| P5 | local | base (seed7) | — | — | — | — | — | KILLED (af→0) |
+| P6 | ALC | assist3.0, upsweep_min0.08 | — | — | — | — | — | KILLED — assist 3.0 too strong (af→0) |
+| P7 | ALC | impact_up_weight=24 | — | — | — | — | — | collapsing (af→0.012) |
+| Q1 | local | assist2.2+up16+gate0.08 | — | — | — | — | — | FAILED to launch (empty log); GPU reused for P3 eval |
+| Q2 | ALC | assist2.6, gate0.08 | — | — | — | — | — | early, af~0.03 (weaker than P3) |
+| Q3 | ALC | assist2.2, gate0.08, slow-decay | — | — | — | — | — | early, af~0.06 |
 
 ## Improvement log (newest first)
 - **2026-07-15 ~00:05** — First read (~35-40k steps, training attached_frac, NOT yet eval'd). Under the up-sweep-required model **every catch is a genuine up-sweep by construction** (creep p=0), so attached_frac here already = physical catches.
