@@ -79,7 +79,18 @@ NEXT: watch `Metrics/attached_frac` for a peak that survives longer/higher than 
 `_spawn_curriculum_reset` early-`return`ed when `spawn_curriculum=False` (which every eval/video sets), leaving the drone at the FIXED default reset pose — NO azimuth/distance randomization. `_spawn_frac()` already returns 1.0 (full spread) when off; removed the early return so eval now samples the true distribution (azimuth ±π, std_end). Committed + synced to ALC (training used curriculum=True so unaffected). **Consequence: every prior eval number was measured at ONE spawn geometry.**
 - **HONEST re-eval of C (spawn-fixed, STRICT detach, 512 envs):** catch **0.583** (was 0.41 — the fixed default spawn was HARDER than average!), hold 0.468 (unchanged), attached_frac 0.137. So catch is even MORE solidly solved (0.58 ≫ 0.30); hold still detach-limited.
 - **Other video feedback:** (2) "uses box to build swing momentum" = the surrogate wall-collision spring-damper bounce (emergent, amplified by the fixed spawn) — task-realism call, could add a wall_penetration penalty if we want it gone; (3) "aimless descent" = likely the fixed-spawn artifact, should vary with random spawns; (4) "jerk not resolved" = the videos are the OLD C ckpt (pre taut-margin fix); the taut-margin reward is now the env DEFAULT and the LSTM arms use it, so new policies won't carry C's jerk.
-- **LSTM eval needs a recurrent-aware evaluator** (`eval_goals.py`'s Runner can't load PPO_RNN weights; naive act()-loop runs the LSTM memoryless because hidden-state propagation lives in record_transition). Writing `scripts/hook_grasp/eval_lstm_goals.py` (builds PPO_RNN agent, propagates `_rnn_final→initial` + zeros on episode end). Peak ckpts pulled: L1@77.5k, L2@57.5k, L3@60k → `experiments/lstm_ckpts/`. Eval IN PROGRESS.
+- **LSTM eval needs a recurrent-aware evaluator** (`eval_goals.py`'s Runner can't load PPO_RNN weights; naive act()-loop runs the LSTM memoryless because hidden-state propagation lives in record_transition). Wrote `scripts/hook_grasp/eval_lstm_goals.py` (builds PPO_RNN agent, propagates `_rnn_final→initial` + zeros on episode end — verified wiring). Peak ckpts pulled: L1@77.5k, L2@57.5k, L3@60k → `experiments/lstm_ckpts/`.
+
+### 🔑 LSTM VERDICT (peak ckpts, spawn-fixed, STRICT detach) — recurrence does NOT break the hold ceiling
+| Arm | config | catch | hold |
+|---|---|---|---|
+| L1 | h256/seq16 (77.5k) | 0.196 | 0.387 |
+| L2 | h256/seq32 (57.5k) | 0.193 | 0.438 |
+| L3 | h128/seq16 (60k)   | 0.132 | 0.403 |
+- Hold **0.39-0.44** = same band as the MLP taut-margin arms (0.44-0.52), NOT climbing toward 0.80. Catch 0.13-0.20 (early peaks + the taut-margin reward halves catch). attached_frac peaked 57-77k and is DECLINING (collapse) → later ckpts won't be better.
+- **CONCLUSION (now confirmed across MLP ~20 arms AND LSTM 3 arms): 80% strict hold is NOT attainable by policy improvement. The `detach_p_vertical=1.0` surrogate is the hard limiter. 80% requires option-2 detach softening — a task-model choice, the user's call.**
+- Note: the LSTM used the taut-margin (jerk-fixed) reward; an LSTM + C's OLD high-catch reward was NOT tried (would raise catch but re-introduce jerk + still detach-capped on hold). Open option if user wants recurrence to have a fairer shot at the CATCH goal.
+- ALC L-arms still training (~80k, past peak); recommend killing to free the GPU unless user wants the OLD-reward LSTM variant.
 
 
 **Goal:** catch>=0.30 AND hold(|caught)>=0.80 @100 steps.
