@@ -27,6 +27,10 @@ parser.add_argument("--steps", type=int, default=600, help="Rollout steps to rec
 parser.add_argument("--frame_every", type=int, default=4, help="Capture a frame every N steps.")
 parser.add_argument("--fps", type=int, default=15, help="Output video fps.")
 parser.add_argument("--seed", type=int, default=7, help="Seed.")
+parser.add_argument("--capture_radius", type=float, default=-1.0, help="Override catch radius (m); <0=cfg.")
+parser.add_argument("--slack_dwell_steps", type=int, default=-1, help="Override detach grace; <0=base(5).")
+parser.add_argument("--detach_p_vertical", type=float, default=-1.0, help="Override vertical detach prob; <0=base(1.0).")
+parser.add_argument("--detach_p_horizontal", type=float, default=-1.0, help="Override horizontal detach prob; <0=base(0.2).")
 parser.add_argument("--out_dir", type=str, default="scripts/hook_grasp/_render", help="Output dir.")
 parser.add_argument("--ml_framework", type=str, default="torch", choices=["torch", "jax", "jax-numpy"])
 AppLauncher.add_app_launcher_args(parser)
@@ -62,6 +66,16 @@ def main():
     for _attr in ("capture_curriculum", "hold_curriculum", "spawn_curriculum"):
         if hasattr(env_cfg, _attr):
             setattr(env_cfg, _attr, False)
+    # optional catch-radius + detach-model overrides (default <0 -> keep base strict model)
+    if hasattr(env_cfg, "attachment"):
+        if args_cli.capture_radius > 0:
+            env_cfg.attachment.capture_radius = args_cli.capture_radius
+        if args_cli.slack_dwell_steps >= 0:
+            env_cfg.attachment.slack_dwell_steps = args_cli.slack_dwell_steps
+        if args_cli.detach_p_vertical >= 0:
+            env_cfg.attachment.detach_p_vertical = args_cli.detach_p_vertical
+        if args_cli.detach_p_horizontal >= 0:
+            env_cfg.attachment.detach_p_horizontal = args_cli.detach_p_horizontal
     # follow-camera on the drone body (same framing as play_sanity/play_hook)
     env_cfg.viewer.origin_type = "asset_body"
     env_cfg.viewer.asset_name = "robot"
