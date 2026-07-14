@@ -229,6 +229,18 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
     # STRIPPED DIAGNOSTIC: fixed target wall (0 = +x). Set -1 to restore the random 4-wall assignment.
     fixed_wall: int = -1
 
+    # --- reverse SWING-PHASE curriculum (physical up-sweep bootstrap) --------------------------------------
+    # With the up-sweep-required catch (attachment.require_upsweep), the drone must PUMP the pendulum so the
+    # hook sweeps UP onto the bar -- a hard-to-discover, energetic maneuver. To bootstrap it we give the drone
+    # an initial velocity TOWARD its assigned wall at spawn: the drone carries momentum at the wall, then as it
+    # arrests the hook (lagging on the wire) swings forward and UP onto the bar -- an ASSISTED up-sweep that
+    # produces catches early so the policy gets the "up-sweep -> catch" signal. The assist DECAYS with the same
+    # spawn-curriculum fraction (strong at frac=0 start -> 0 at frac=1 end) so by the end the drone must
+    # generate the whole approach+pump itself. EVAL-SAFE: spawn_curriculum=False -> frac=1 -> zero assist.
+    swing_assist_curriculum: bool = True
+    swing_assist_v0: float = 1.3       # m/s: peak initial toward-wall drone speed at curriculum start (frac=0)
+    swing_assist_up: float = 0.3       # fraction of v0 added as an initial UP velocity (helps seed the up-sweep)
+
     # --- rewards -------------------------------------------------------------------------
     # Redesigned reward (2026-07-09). Structure:
     #   * APPROACH on the DRONE->BASKET distance (coarse driver: get the drone to the target).

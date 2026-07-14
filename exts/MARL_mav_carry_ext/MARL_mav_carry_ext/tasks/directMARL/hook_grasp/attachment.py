@@ -69,6 +69,17 @@ class HookAttachmentCfg:
     (``v_normal < -approach_eps``); models that the hook must be swung against the wall to engage."""
     approach_eps: float = 0.02
     """Into-wall speed (m/s) below which we do not treat the touch as an engagement attempt."""
+    require_upsweep: bool = True
+    """PHYSICAL J-HOOK MODEL: a hook only seats on a bar when its throat is RISING onto the bar, i.e. the
+    hook must be sweeping UP at contact. When True, (a) ``direction_factor`` gives ~``p_min`` for any
+    ``v_up <= 0`` and ramps to ``p_max`` at ``v_up >= v_ref`` (no free midpoint for a horizontal drift), and
+    (b) a contact additionally requires ``v_up > upsweep_v_min``. Together these REMOVE the unphysical
+    'creep the dangling hook into the zone at ~0 velocity' optimum -> the drone must PUMP the pendulum so
+    the hook up-sweeps onto the bar (real cable-suspended aerial-manipulation maneuver). Set False for the
+    legacy symmetric model."""
+    upsweep_v_min: float = 0.12
+    """Minimum upward hook speed (m/s, along wall_up) for a contact to count as an engagement when
+    ``require_upsweep`` -- a genuine up-stroke, not incidental drift."""
 
     # --- slack / detach -----------------------------------------------------------------
     wire_length: float = 0.55
@@ -94,9 +105,16 @@ def _project(v: torch.Tensor, axis: torch.Tensor) -> torch.Tensor:
 def direction_factor(v_up: torch.Tensor, cfg: HookAttachmentCfg) -> torch.Tensor:
     """Map the up-component of relative velocity to a probability in ``[p_min, p_max]``.
 
-    ``v_up > 0`` (moving up the wall) -> toward ``p_max``; ``v_up < 0`` (down) -> toward ``p_min``;
-    ``v_up == 0`` -> midpoint. Saturates at ``+/- v_ref``.
+    ``require_upsweep`` (physical J-hook): only an UP-stroke seats the throat on the bar, so ``v_up <= 0``
+    -> ``p_min`` and it ramps LINEARLY to ``p_max`` at ``v_up >= v_ref``. There is NO free midpoint at
+    ``v_up == 0`` -> a hook drifting horizontally into the zone cannot latch, which removes the creep optimum.
+
+    Legacy symmetric model (``require_upsweep=False``): ``v_up > 0`` -> toward ``p_max``; ``v_up < 0`` -> toward
+    ``p_min``; ``v_up == 0`` -> midpoint. Saturates at ``+/- v_ref``.
     """
+    if cfg.require_upsweep:
+        u = torch.clamp(v_up / cfg.v_ref, 0.0, 1.0)  # in [0, 1]; v_up<=0 -> 0 -> p_min
+        return cfg.p_min + (cfg.p_max - cfg.p_min) * u
     u = torch.clamp(v_up / cfg.v_ref, -1.0, 1.0)  # in [-1, 1]
     return cfg.p_min + (cfg.p_max - cfg.p_min) * (u + 1.0) * 0.5
 
@@ -129,6 +147,9 @@ def compute_catch_probability(
     contact = within
     if cfg.require_approach:
         contact = contact & (v_normal < -cfg.approach_eps)
+    if cfg.require_upsweep:
+        # a genuine up-stroke is required to seat the J-hook throat on the bar (not incidental drift)
+        contact = contact & (v_up > cfg.upsweep_v_min)
 
     p_dir = direction_factor(v_up, cfg)
     # controlled-engagement gate: scale the catch prob down as the TOTAL relative speed grows past v_ref, to 0 at

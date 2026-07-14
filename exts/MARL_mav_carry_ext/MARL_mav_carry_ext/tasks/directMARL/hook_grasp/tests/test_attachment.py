@@ -35,8 +35,8 @@ def _bar_frame(n):
 
 
 def test_direction_ordering_up_gt_side_gt_down():
-    """Requirement 3: parallel-up > sideways > parallel-down catch probability."""
-    cfg = HookAttachmentCfg()
+    """Legacy SYMMETRIC model (require_upsweep=False): parallel-up > sideways > parallel-down."""
+    cfg = HookAttachmentCfg(require_upsweep=False)
     bar_pos, bar_axis, wall_normal, wall_up = _bar_frame(1)
     hook_pos = bar_pos.clone()  # in contact
 
@@ -51,8 +51,28 @@ def test_direction_ordering_up_gt_side_gt_down():
     p_side = compute_catch_probability(hook_pos, v_side, bar_pos, bar_axis, wall_normal, wall_up, cfg)[0]
 
     assert p_up.item() > p_side.item() > p_down.item(), (p_up, p_side, p_down)
-    assert p_up.item() > 0.6 and p_down.item() < 0.1   # p_up == p_max (0.7) for a full-speed up-sweep
-    print(f"[ordering] p_up={p_up.item():.3f} > p_side={p_side.item():.3f} > p_down={p_down.item():.3f}  OK")
+    assert p_up.item() > 0.6 and p_down.item() < 0.1
+    print(f"[ordering-legacy] p_up={p_up.item():.3f} > p_side={p_side.item():.3f} > p_down={p_down.item():.3f}  OK")
+
+
+def test_upsweep_required_kills_creep():
+    """PHYSICAL J-hook model (require_upsweep=True, default): only a genuine UP-sweep into the wall seats the
+    hook. A horizontal 'creep' (v_up==0) and a down-sweep MUST NOT catch, even in perfect contact -- this is
+    what removes the unphysical creep-into-the-zone optimum."""
+    cfg = HookAttachmentCfg()  # require_upsweep True by default
+    bar_pos, bar_axis, wall_normal, wall_up = _bar_frame(1)
+    hook_pos = bar_pos.clone()
+    approach = torch.tensor([[-0.3, 0.0, 0.0]], device=DEV)  # gentle into-wall so require_approach passes
+    p_creep, c_creep = compute_catch_probability(hook_pos, approach + torch.tensor([[0.0, 1.0, 0.0]], device=DEV),
+                                                 bar_pos, bar_axis, wall_normal, wall_up, cfg)   # v_up == 0
+    p_down, _ = compute_catch_probability(hook_pos, approach + torch.tensor([[0.0, 0.0, -0.5]], device=DEV),
+                                          bar_pos, bar_axis, wall_normal, wall_up, cfg)
+    p_up, c_up = compute_catch_probability(hook_pos, approach + torch.tensor([[0.0, 0.0, 0.6]], device=DEV),
+                                           bar_pos, bar_axis, wall_normal, wall_up, cfg)
+    assert p_creep.item() == 0.0 and not c_creep.item(), p_creep      # horizontal creep cannot latch
+    assert p_down.item() == 0.0, p_down                                # down-sweep cannot latch
+    assert p_up.item() > 0.4 and c_up.item(), p_up                     # a real up-sweep does
+    print(f"[upsweep] creep={p_creep.item():.3f} down={p_down.item():.3f} up={p_up.item():.3f}  OK")
 
 
 def test_proximity_gate():

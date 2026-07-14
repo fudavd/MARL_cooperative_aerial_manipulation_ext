@@ -994,7 +994,18 @@ class MARLHookGraspEnv(DirectMARLEnv):
         quat = quat_from_euler_xyz(zeros, zeros, yaw)                          # (M, 4)
         world_pos = spawn_local + self.scene.env_origins[env_ids]             # absolute (incl env origin)
         self.robot.write_root_pose_to_sim(torch.cat([world_pos, quat], dim=-1), env_ids)
-        self.robot.write_root_velocity_to_sim(torch.zeros(M, 6, device=self.device), env_ids)
+        # reverse SWING-PHASE curriculum: seed an initial velocity TOWARD the assigned wall (+ a little UP) so
+        # the pendulum hook swings forward and UP onto the bar (assisted up-sweep). Magnitude DECAYS with the
+        # curriculum (assist = v0 * (1 - frac): full at frac=0 start -> 0 at frac=1 end / eval), so the policy
+        # sees up-sweep catches early then must generate the pump itself. `normal_w` is the horizontal outward
+        # wall normal, so -normal_w points into the wall.
+        vel = torch.zeros(M, 6, device=self.device)
+        if self.cfg.swing_assist_curriculum:
+            assist = self.cfg.swing_assist_v0 * (1.0 - frac)
+            vel[:, 0] = -normal_w[:, 0] * assist                              # horizontal, toward the wall
+            vel[:, 1] = -normal_w[:, 1] * assist
+            vel[:, 2] = assist * self.cfg.swing_assist_up                     # small UP kick to seed the up-sweep
+        self.robot.write_root_velocity_to_sim(vel, env_ids)
 
     # =====================================================================================
     # debug vis
