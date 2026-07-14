@@ -90,7 +90,16 @@ NEXT: watch `Metrics/attached_frac` for a peak that survives longer/higher than 
 - Hold **0.39-0.44** = same band as the MLP taut-margin arms (0.44-0.52), NOT climbing toward 0.80. Catch 0.13-0.20 (early peaks + the taut-margin reward halves catch). attached_frac peaked 57-77k and is DECLINING (collapse) → later ckpts won't be better.
 - **CONCLUSION (now confirmed across MLP ~20 arms AND LSTM 3 arms): 80% strict hold is NOT attainable by policy improvement. The `detach_p_vertical=1.0` surrogate is the hard limiter. 80% requires option-2 detach softening — a task-model choice, the user's call.**
 - Note: the LSTM used the taut-margin (jerk-fixed) reward; an LSTM + C's OLD high-catch reward was NOT tried (would raise catch but re-introduce jerk + still detach-capped on hold). Open option if user wants recurrence to have a fairer shot at the CATCH goal.
-- ALC L-arms still training (~80k, past peak); recommend killing to free the GPU unless user wants the OLD-reward LSTM variant.
+- ALC L-arms killed (past peak, verdict clear); both GPUs freed.
+
+### HONEST DETACH BRACKET (C policy, SPAWN-FIXED, 512 envs) — decision-support for option 2
+| detach model | catch | hold | goals |
+|---|---|---|---|
+| STRICT (pv 1.0)                    | 0.583 | 0.468 | ✗ |
+| MILD (dwell 10, pv 0.6)            | 0.572 | 0.679 | ✗ |
+| RELAXED (dwell 15, pv 0.3, ph 0.1) | 0.546 | **0.852** | ✓ BOTH MET |
+- The spawn fix RAISED the whole bracket vs the old buggy numbers (relaxed 0.82→0.85 hold, catch 0.36→0.55). **RELAXED detach clears both goals with the EXISTING C policy — no retraining.** MILD (0.68) misses 0.80; the mildest 80%-clearing point is ~pv 0.4-0.5 (not yet pinpointed — one eval would nail it if user picks option 2).
+- **DELIVERABLE STATE for user decision:** (1) accept STRICT best (catch 0.58 / hold 0.47); (2) soften detach — RELAXED already meets both goals, or pinpoint the mildest pv that clears 80%; (3) LSTM+old-reward for higher catch (won't fix hold). 80% is a detach-model choice, the user's call.
 
 
 **Goal:** catch>=0.30 AND hold(|caught)>=0.80 @100 steps.
