@@ -954,8 +954,10 @@ class MARLHookGraspEnv(DirectMARLEnv):
         present while harder far/near spawns fade in. The azimuth WIDENS around the box (0 -> +/-pi) with the
         curriculum. Distance is clamped to [spawn_dist_min, spawn_dist_max] so nothing spawns inside the box.
         Overrides the reset-event root pose. spawn_curriculum=False (eval) -> frac=1 == full spread."""
-        if not self.cfg.spawn_curriculum:
-            return
+        # NOTE: do NOT early-return when the curriculum is off. `_spawn_frac()` returns 1.0 in that case,
+        # which is the INTENDED "honest full range" eval spread (azimuth +/-pi, std_end). Returning here
+        # instead left the drone at the fixed default reset pose -> eval/video spawned from ONE geometry
+        # (no randomization), which is the "spawn doesn't look random" artifact. frac=1.0 restores the spread.
         M = len(env_ids)
         frac = self._spawn_frac()
         q = self.basket_quat_w[env_ids]                                        # (M, 4)
