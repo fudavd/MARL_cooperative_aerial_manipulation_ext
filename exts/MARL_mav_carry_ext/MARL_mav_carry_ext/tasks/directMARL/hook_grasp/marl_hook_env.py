@@ -884,6 +884,10 @@ class MARLHookGraspEnv(DirectMARLEnv):
         self.attach_point_w[env_ids] = 0.0
         self._succeeded_once[env_ids] = False
         self._newly_succeeded[env_ids] = False
+        # reverse HOLD curriculum: override a decaying fraction of these envs to spawn ALREADY ATTACHED at a
+        # steady-state hold pose (must run AFTER the attach buffers above are zeroed and AFTER the spawn pose is
+        # set, since it overrides both for the selected subset).
+        self._attached_spawn_reset(env_ids)
         # flag these envs so the next _get_rewards seeds _prev_hook_wall with their post-spawn distance
         # (first-step approach delta = 0), instead of the stale last-episode distance -> no reset penalty spike.
         self._reset_approach_mask[env_ids] = True
@@ -1015,6 +1019,62 @@ class MARLHookGraspEnv(DirectMARLEnv):
             vel[:, 1] = -normal_w[:, 1] * assist
             vel[:, 2] = assist * self.cfg.swing_assist_up                     # small UP kick to seed the up-sweep
         self.robot.write_root_velocity_to_sim(vel, env_ids)
+
+    def _attached_spawn_reset(self, env_ids):
+        """Reverse HOLD curriculum: spawn a DECAYING fraction of envs ALREADY ATTACHED at a near-steady-state
+        hold pose -- drone hovering ``wire_length`` up-and-out from the assigned wall's bar, hook pinned to the
+        bar. Overrides the point-blank spawn + unattached reset for the SELECTED envs only, so the policy first
+        masters the steady-state HOLD (the harder unmet target), decoupled from the ceiling-bound catch. The
+        attached fraction decays ``frac0 -> 0`` and the pose jitter grows ``0 -> jitter`` over the curriculum, so
+        training expands "start at the goal -> full catch-then-hold" from an ever-wider basin. Disabled
+        (0 attached) when ``attached_spawn_curriculum`` is False -> eval stays honest catch-from-scratch."""
+        if not self.cfg.attached_spawn_curriculum:
+            return
+        M = len(env_ids)
+        if M == 0:
+            return
+        prog = min(1.0, self._ctrl_step / max(1, self.cfg.attached_spawn_steps))
+        frac = self.cfg.attached_spawn_frac0 * (1.0 - prog)
+        if frac <= 0.0:
+            return
+        sel = torch.rand(M, device=self.device) < frac
+        if not bool(sel.any()):
+            return
+        sub = env_ids[sel]                                                     # (n,) envs to spawn attached
+        n = len(sub)
+        i = 0                                                                  # hook-grasp is single-drone
+        q = self.basket_quat_w[sub]                                           # (n, 4)
+        idx = self._assigned_wall[sub, i]                                     # (n,) assigned wall 0..3
+        # bar point (basket frame): wall face (+/-hx or +/-hy), horizontal CENTRE, MID of the catch z-band
+        hx, hy = self.cfg.basket_half_x, self.cfg.basket_half_y
+        z_mid = 0.5 * (self.cfg.basket_wall_z_lo + self.cfg.basket_wall_z_hi)
+        faces = torch.tensor([[hx, 0, 0], [-hx, 0, 0], [0, hy, 0], [0, -hy, 0]], device=self.device)[idx]
+        bar_bf = faces.clone()
+        bar_bf[:, 2] = z_mid
+        bar_w = self.basket_pos_w[sub] + quat_rotate(q, bar_bf)               # (n, 3) env-local world
+        # outward wall normal (world) + steady-state drone offset dir (up-and-out so wire is taut, tension pins hook)
+        normals_bf = torch.tensor([[1.0, 0, 0], [-1.0, 0, 0], [0, 1.0, 0], [0, -1.0, 0]], device=self.device)[idx]
+        n_out = normalize(quat_rotate(q, normals_bf))                         # (n, 3)
+        up = torch.zeros_like(n_out); up[:, 2] = 1.0
+        steady_dir = normalize(self.cfg.attached_spawn_out * n_out + self.cfg.attached_spawn_up * up)
+        wl = float(self._acfg.wire_length)
+        drone_w = bar_w + wl * steady_dir                                     # (n, 3)
+        jit = self.cfg.attached_spawn_jitter * prog                          # basin widens with the curriculum
+        if jit > 0.0:
+            drone_w = drone_w + (torch.rand(n, 3, device=self.device) * 2 - 1) * jit
+        drone_w[:, 2] = drone_w[:, 2].clamp_min(self.cfg.min_drone_height + 0.2)
+        yaw = torch.atan2(-n_out[:, 1], -n_out[:, 0])                        # face the wall
+        zeros = torch.zeros(n, device=self.device)
+        quat = quat_from_euler_xyz(zeros, zeros, yaw)
+        world_pos = drone_w + self.scene.env_origins[sub]
+        self.robot.write_root_pose_to_sim(torch.cat([world_pos, quat], dim=-1), sub)
+        self.robot.write_root_velocity_to_sim(torch.zeros(n, 6, device=self.device), sub)
+        # set the ATTACHMENT state: pinned to the bar, latched; hold counter starts at 0 (policy must sustain it)
+        self.attached[sub, i] = True
+        self.attach_point_w[sub, i] = bar_w
+        self.catch_latch[sub, i] = True
+        self.hold_counter[sub, i] = 0
+        self.slack_timer[sub, i] = 0
 
     # =====================================================================================
     # debug vis

@@ -241,6 +241,20 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
     swing_assist_v0: float = 1.3       # m/s: peak initial toward-wall drone speed at curriculum start (frac=0)
     swing_assist_up: float = 0.3       # fraction of v0 added as an initial UP velocity (helps seed the up-sweep)
 
+    # reverse HOLD curriculum (spawn-attached): spawn a FRACTION of envs ALREADY ATTACHED at a near-steady-state
+    # hold pose (drone hovering wire_length up-and-out from the bar, hook pinned to the bar), so the policy masters
+    # the steady-state HOLD first -- the harder unmet target (hold ~0.55 -> 0.80 needed) -- decoupled from the
+    # ceiling-bound catch. The attached fraction DECAYS with the curriculum (frac0 -> 0 over the steps below), so
+    # training expands "start at the goal -> full catch-then-hold". A small pose jitter GROWS with the curriculum
+    # so the hold is learned from an ever-wider basin. EVAL-SAFE: attached_spawn_curriculum=False -> 0 attached
+    # spawns (honest catch-from-scratch).
+    attached_spawn_curriculum: bool = True
+    attached_spawn_frac0: float = 0.5    # fraction of envs spawned attached at curriculum start (step 0)
+    attached_spawn_steps: int = 120000   # control steps over which the attached fraction decays frac0 -> 0
+    attached_spawn_out: float = 0.5      # steady pose dir = normalize(out*n_wall + up*z); horizontal (out) share
+    attached_spawn_up: float = 0.87      # ... vertical (up) share -> ~30deg from vertical, wire taut, tension holds hook on bar
+    attached_spawn_jitter: float = 0.15  # m: max pose jitter at curriculum END (grows 0 -> this with frac) to widen the hold basin
+
     # --- rewards -------------------------------------------------------------------------
     # Redesigned reward (2026-07-09). Structure:
     #   * APPROACH on the DRONE->BASKET distance (coarse driver: get the drone to the target).
