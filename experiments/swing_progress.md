@@ -12,6 +12,12 @@
 ## AUTONOMOUS IMPROVEMENT FLEET (2026-07-15 18:45 → 2026-07-16 11:00)
 Rulebook = `experiments/AGENT_CONSTITUTION.md` (binding: never change task / 135-dim actor obs / 180-dim critic state / catch-detach physics / success thresholds; only rewards·curricula·HP·spawn-fields). wandb project `hook-grasp-mappo`.
 
+- **2026-07-15 21:05 — GEN-25 EARLY VERDICT (matched step ~45k, curricula still active so af is inflated but comparison is fair; `catch` is the clean metric).**
+  - v24H2 base: af 0.012 (peak 0.073@34k), **catch 0.080** → fully collapsed (the peak-then-collapse we target).
+  - **v25A1 nopull: catch 0.218, af 0.101** · **v25A2 klstop: catch 0.275, af 0.126** ← both decisively beat H2 AND resist the af collapse. Anti-collapse + remove-wall_pull thesis CONFIRMED.
+  - v25A3 basin: af 0.133 but **catch 0.058** → basin rebalance (progress16/lock8) backfired: over-rewards the attached state so policy coasts on curriculum-spawned attachment instead of catching. **RETIRED.**
+  - **Action:** killed A3 (my slot), launched **v25A12_combo** = A1⊕A2 (wall_pull=0 + kl_threshold=0.012) to stack the two winners (research agent's top trio minus deferred B1). Portfolio 8/8, GPU 23.3/24.5GB.
+  - NOTE: real verdict still pending curriculum anneal (~capture 200k, attached-spawn 120k → true task ~01:00-05:00); eval_mappo.py judges then.
 - **2026-07-15 18:45 — REALITY CHECK from new eval_mappo.py.** v24H2 @55k on the TRUE task (all curricula+assist OFF): **catch 0.041, attached_frac 0.0065, hold|caught 0.5 (n=8 noisy), jerk 387N.** TB metrics (catch 0.35, af 0.052) are ~8× curriculum/assist-inflated. ⇒ **catch, not hold, is the binding constraint** (0.04 ≪ 0.30). Re-prioritized queue toward catch levers. eval_mappo.py verified (actor 135-dim confirmed, 2 build bugs fixed, skrl patch already applied).
 - **HP verdict (mid-run TB):** wide clip(0.2)+entropy(0.004) [H2] ≫ conservative defaults [MA1 collapsed af 0.006@123k]. H2 = new base config.
 - **Gen-25 launched (build on H2 base):**
