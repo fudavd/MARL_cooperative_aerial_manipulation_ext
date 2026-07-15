@@ -41,7 +41,7 @@ from isaaclab_tasks.utils import load_cfg_from_registry, parse_env_cfg
 
 env_cfg = parse_env_cfg(args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs)
 env_cfg.seed = args_cli.seed
-for a in ("capture_curriculum", "hold_curriculum", "spawn_curriculum"):
+for a in ("capture_curriculum", "hold_curriculum", "spawn_curriculum", "attached_spawn_curriculum"):
     if hasattr(env_cfg, a): setattr(env_cfg, a, False)
 env_cfg.attachment.capture_radius = args_cli.capture_radius
 if args_cli.slack_dwell_steps >= 0: env_cfg.attachment.slack_dwell_steps = args_cli.slack_dwell_steps

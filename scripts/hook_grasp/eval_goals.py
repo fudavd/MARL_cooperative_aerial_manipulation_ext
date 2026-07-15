@@ -69,7 +69,7 @@ def main():
     env_cfg = parse_env_cfg(args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs)
     env_cfg.seed = args_cli.seed
     # honest eval: disable every training curriculum so difficulty is the true (end) value ...
-    for _attr in ("capture_curriculum", "hold_curriculum", "spawn_curriculum"):
+    for _attr in ("capture_curriculum", "hold_curriculum", "spawn_curriculum", "attached_spawn_curriculum"):
         if hasattr(env_cfg, _attr):
             setattr(env_cfg, _attr, False)
     # ... and DISABLE the env's own hold-success termination so it never resets on the hold event; we measure
