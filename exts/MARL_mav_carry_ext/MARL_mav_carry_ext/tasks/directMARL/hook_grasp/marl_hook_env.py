@@ -665,6 +665,11 @@ class MARLHookGraspEnv(DirectMARLEnv):
             into_speed = torch.clamp(-v_normal, min=0.0)
             excess = torch.clamp(into_speed - self.cfg.impact_target_speed, min=0.0)
             impact_perp += -self.cfg.impact_perp_weight * excess.square() * in_zone
+            # TOWARD-WALL reward: reward the GENTLE perpendicular into-wall speed up to the soft-contact target,
+            # so a PERPENDICULAR strike beats a sideways skim (which earns v_up just as well). Makes impact_perp
+            # target-SEEKING (reward gentle approach + penalize excess) instead of one-sided. Zone + unattached.
+            if self.cfg.impact_toward_weight > 0.0:
+                impact_perp += self.cfg.impact_toward_weight * torch.clamp(into_speed, max=self.cfg.impact_target_speed) * in_zone
             # in-plane component -> signed v_up = |v_in_plane| * sin(angle) ("sinus of v_wall"):
             #   up rewarded (+), horizontal (along bar_axis) 0, down penalized (-)
             if self.cfg.reward_aimed_upsweep:
@@ -693,6 +698,15 @@ class MARLHookGraspEnv(DirectMARLEnv):
                 * ((dist_da - taut_thr) / self.cfg.taut_margin_target).clamp(0.0, 1.0)
                 * attached.float()
             )
+            # ANTI-SAG / straight-wire hold (fixes the "crash down, wire bends, then detach" failure): while
+            # attached, PENALIZE losing altitude (downward drone velocity) and PENALIZE the wire going slack
+            # (drone-anchor distance dropping below the taut threshold, proportional to slack depth). These give
+            # a real cost for sagging, beyond just forfeiting the small taut bonus. Both off (0) by default.
+            if self.cfg.anti_sag_weight > 0.0:
+                v_drone_up = (self.drone_linear_velocities[:, i] * self.wall_up_w).sum(-1)   # + = rising
+                tension += -self.cfg.anti_sag_weight * torch.clamp(-v_drone_up, min=0.0) * attached.float()
+            if self.cfg.slack_penalty_weight > 0.0:
+                tension += -self.cfg.slack_penalty_weight * torch.clamp(taut_thr - dist_da, min=0.0) * attached.float()
             # --- anti-pull-to-wall: while attached, PENALIZE the drone moving INTO the wall (toward the anchor).
             # Pulling toward the wall both goes slack AND yanks the stiff pin -> unrealistic jerk on the drone.
             # Only the into-wall velocity component is penalized; holding still or pulling away is free. Gated to

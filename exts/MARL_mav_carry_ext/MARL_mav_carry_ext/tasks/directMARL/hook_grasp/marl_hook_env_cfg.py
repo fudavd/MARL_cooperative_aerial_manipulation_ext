@@ -295,6 +295,15 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
     impact_perp_weight = 5.0      # penalty weight on the SQUARED excess into-wall speed above impact_target_speed
     impact_target_speed = 0.3     # m/s into-wall contact speed treated as "soft"; only faster is penalized
     impact_up_weight = 8.0        # reward weight on the signed in-plane up component v_up
+    # TOWARD-WALL approach (fixes the "sideways swing" gap): reward the GENTLE perpendicular into-wall hook speed
+    # UP TO impact_target_speed, so a PERPENDICULAR pendulum strike is preferred over a sideways skim (which earns
+    # v_up just as well). Complements impact_perp (which only PENALIZES excess into-wall speed). Zone+unattached.
+    impact_toward_weight: float = 0.0   # reward on min(into_wall_speed, impact_target_speed); off by default
+    # ANTI-SAG / straight-wire hold (fixes concern 1): while ATTACHED, penalize the drone LOSING ALTITUDE (down
+    # velocity) and penalize the drone-anchor distance dropping BELOW taut_thr (wire visibly bending). Gives a
+    # real cost for the "crash down -> wire loose -> detach" failure, beyond merely losing the small taut bonus.
+    anti_sag_weight: float = 0.0        # penalty on downward drone speed while attached
+    slack_penalty_weight: float = 0.0   # penalty on slack depth clamp(taut_thr - dist_da, 0) while attached
     # AIMED up-sweep (raises catch PRECISION): reward the up-stroke weighted by nearness to the bar exp(-k*dist)
     # instead of the binary impact-box gate, so the swing is rewarded most when it peaks ON the bar. Opt-in.
     reward_aimed_upsweep: bool = False
