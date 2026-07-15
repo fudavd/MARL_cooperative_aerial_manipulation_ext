@@ -666,7 +666,16 @@ class MARLHookGraspEnv(DirectMARLEnv):
             impact_perp += -self.cfg.impact_perp_weight * excess.square() * in_zone
             # in-plane component -> signed v_up = |v_in_plane| * sin(angle) ("sinus of v_wall"):
             #   up rewarded (+), horizontal (along bar_axis) 0, down penalized (-)
-            impact_up += self.cfg.impact_up_weight * v_up * in_zone
+            if self.cfg.reward_aimed_upsweep:
+                # AIMED up-sweep: reward the UP component weighted by nearness to the bar (exp(-k*dist)), so the
+                # swing is rewarded most when it peaks ON TARGET, not merely inside the coarse impact box. This
+                # sharpens the pendulum's aim -> the up-sweep connects with the bar (raises catch rate) while
+                # staying a genuine swing. clamp(v_up,0): only reward the up-stroke (the catch model already
+                # handles down/creep). Active over the whole unattached approach (smooth exp gate, not binary).
+                aim = torch.exp(-self.cfg.upsweep_aim_k * hook_bar) * (~attached).float()
+                impact_up += self.cfg.impact_up_weight * torch.clamp(v_up, min=0.0) * aim
+            else:
+                impact_up += self.cfg.impact_up_weight * v_up * in_zone
 
             # --- locking: reward staying locked (attached) --------------------------------
             lock += self.cfg.lock_weight * attached.float()

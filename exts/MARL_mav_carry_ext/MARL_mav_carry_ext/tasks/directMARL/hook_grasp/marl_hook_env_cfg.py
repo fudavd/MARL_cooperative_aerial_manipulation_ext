@@ -281,6 +281,10 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
     impact_perp_weight = 5.0      # penalty weight on the SQUARED excess into-wall speed above impact_target_speed
     impact_target_speed = 0.3     # m/s into-wall contact speed treated as "soft"; only faster is penalized
     impact_up_weight = 8.0        # reward weight on the signed in-plane up component v_up
+    # AIMED up-sweep (raises catch PRECISION): reward the up-stroke weighted by nearness to the bar exp(-k*dist)
+    # instead of the binary impact-box gate, so the swing is rewarded most when it peaks ON the bar. Opt-in.
+    reward_aimed_upsweep: bool = False
+    upsweep_aim_k: float = 3.0    # exp(-k*hook_bar_dist): ~0.55@0.2m, ~0.26@0.45m -> concentrates the up-reward at the bar
 
     # Attaching / holding = the PRIMARY objective. Rewards:
     #   * catch_bonus  : +bonus on EVERY attach event (not one-off) -> lure to actually engage the hook,
