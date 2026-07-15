@@ -28,16 +28,24 @@ Configs on the C recipe. New physics default: `require_upsweep=True`, `swing_ass
 | Q1 | local | assist2.2+up16+gate0.08 | — | — | — | — | — | FAILED to launch (empty log); GPU reused for P3 eval |
 | Q2 | ALC | assist2.6, gate0.08 | — | — | — | — | — | early, af~0.03 (weaker than P3) |
 | Q3 | ALC | assist2.2, gate0.08, slow-decay | — | — | — | — | — | early, af~0.06 |
-| **R2** | ALC | mod-explore mls-0.5, assist2.2/gate0.08 | 27.5k | **0.0072** | **0.61** | **85%** | **+0.70** | ✅ GENUINE SWING (amp 0.79m) — physics solved; catch precision is the gap |
-| R1 | ALC | mod-explore mls0.0 | — | — | — | — | — | training ~40k/750k |
-| R3 | ALC | mls0.0 + low-entropy | — | — | — | — | — | training ~40k |
-| R4 | ALC | mls0.5 | — | — | — | — | — | training ~40k |
-| R5 | ALC | mls0.0 + impact_up16 | — | — | — | — | — | training ~40k |
-| **S1** | ALC | R1 + **aimed-upsweep** (aim_k3) | — | — | — | — | — | 🆕 A/B: does aimed reward raise catch? (mls0.0) |
-| **S2** | ALC | R2 + **aimed-upsweep** (aim_k3) | — | — | — | — | — | 🆕 A/B: aimed vs R2 at matched mls-0.5 |
+| **R2** | ALC | mod-explore **mls-0.5**, assist2.2/gate0.08 | 57.5k | **0.0197** | 0.39 | **91%** | +0.55 | ✅ WINNER of exploration bracket; catch climbing 0.0072→0.0197; swing tightened to controlled 0.26m arc |
+| R1 | ALC | mod-explore mls0.0 | 70k | 0.0074 | 0.38 | 90% | +0.76 | mls0.0 ⇒ ~½ R2 catch (higher noise = less precise); losing branch |
+| R3 | ALC | mls0.0 + low-entropy | — | — | — | — | — | training (mls0.0 losing branch) |
+| R4 | ALC | mls0.5 | — | — | — | — | — | training (highest noise, expected worst) |
+| R5 | ALC | mls0.0 + impact_up16 | — | — | — | — | — | training (mls0.0 losing branch) |
+| S1 | ALC | ≈R1 + aimed-upsweep (aim_k3) | — | — | — | — | — | training ~15k (mls0.0; note: missing R2 alive/prox/hold flags) |
+| S2 | ALC | ≈R2 + aimed-upsweep (aim_k3) | — | — | — | — | — | training ~15k (mls-0.5; CONFOUNDED: missing R2 alive/prox/hold-curric flags) |
+| **U1** | ALC | R2 recipe + **aimed + WIDE radius (0.25→0.13/200k)** | — | — | — | — | — | 🆕 both levers on exact R2 recipe; 96 envs (GPU headroom) |
 
 ## Improvement log (newest first)
-- **2026-07-15 ~10:30 — ✅ PHYSICS SOLVED, precision is the remaining gap. Committed aimed-upsweep reward.** R2 (moderate exploration mls=-0.5) DETERMINISTIC eval = **genuine pendulum swing**: v_up +0.70, 85% up-sweep, amplitude 0.79m (≈ real 0.55m-wire arc), hold-given-caught 0.61. This is the physically-correct behaviour the user asked for — the drone up-swings the hook onto the bar, no creep (0% creep-like catches). BUT deterministic catch only 0.0072 → the swing is genuine but doesn't reliably *connect* with the bar (aiming/precision, not physicality).
+- **2026-07-15 ~03:10 — R-bracket verdict + WIDE-RADIUS lever identified.** Deterministic eval of the exploration bracket at ~58-70k: **R2 (mls=-0.5) catch 0.0197 = 2.7× R1 (mls=0.0) 0.0074**, both genuinely physical (90-91% up-sweep), R2's swing tighter/more controlled (0.26m vs 0.34m amp). **Lower action-noise ⇒ better catch precision** — confirmed. R2 catch is *climbing* with training (0.0072@27.5k → 0.0197@57.5k).
+  - **But best catch 0.0197 @58k vs 0.30 target = 15× gap. Precision is the hard bottleneck** (inherent to the genuine-swing constraint — the up-sweep must peak within 0.13m of the bar with v_up>gate).
+  - **KEY FINDING: the capture-radius curriculum was a near-no-op.** Arms trained with `capture_radius_start=0.15` → target 0.13 = only 0.02m of slack, and at 58k the anneal (120k steps) had it at ~0.14. That gives almost no bootstrap help. (Also the cfg *default* `capture_radius_start=0.08` is inverted vs its "loose→tighten" comment — a latent footgun; arms override it so running arms are fine.)
+  - **NEW LEVER — real wide-radius anneal:** start radius **0.25 → 0.13 over 200k** so the genuine swing racks up catches early with a forgiving radius, then tightens to true hook geometry. Eval stays honest (`eval_goals` disables capture/hold/spawn curricula → radius pinned at 0.13, swing-assist decays to 0). This is the strongest curriculum lever for a hard-precision task and squarely the "curriculum shaping" the user mandated.
+  - **Could not free GPU** (auto-mode classifier blocked killing pre-compaction PIDs — reasonable guard). So launched **ONE** arm in the ~4GB headroom: **U1 = R2 exact recipe + aimed-upsweep + wide radius (0.25→0.13/200k), 96 envs**. R2 (narrow radius) keeps running as the baseline. If U1 catch ≫ R2, wide-radius is the path → scale it up when GPU frees.
+  - Next: eval S-wave (aimed test) at ~55k (~45min), re-eval R2 at peak ~100k+, then U1 at ~55k (~1.8h).
+
+- **2026-07-15 ~02:30 — ✅ PHYSICS SOLVED, precision is the remaining gap. Committed aimed-upsweep reward.** R2 (moderate exploration mls=-0.5) DETERMINISTIC eval = **genuine pendulum swing**: v_up +0.70, 85% up-sweep, amplitude 0.79m (≈ real 0.55m-wire arc), hold-given-caught 0.61. This is the physically-correct behaviour the user asked for — the drone up-swings the hook onto the bar, no creep (0% creep-like catches). BUT deterministic catch only 0.0072 → the swing is genuine but doesn't reliably *connect* with the bar (aiming/precision, not physicality).
   - **Reward fix (committed `bac7e6d`):** `reward_aimed_upsweep` — reward the up-stroke weighted by `exp(-k·hook_bar_dist)` so the swing is rewarded most when it peaks ON the bar (not merely inside the coarse impact box). Config-gated (default off; R-wave unaffected). Smoke-validated 160/160, 0 errors.
   - **S-WAVE launched (ALC, alongside R-wave):** S1 = R1 config (mls0.0) + aimed-upsweep, S2 = R2 config (mls-0.5) + aimed-upsweep, both aim_k=3.0, assist2.2/gate0.08. Clean A/B — R1 vs S1 and R2 vs S2 at matched exploration isolate the aimed-reward effect on catch precision.
   - **Eval plan:** let R+S mature to ~55k (peak), deterministic eval_goals + diag_catch on all; pick highest catch that keeps up-sweep% ≫ 80% (must stay physical).
