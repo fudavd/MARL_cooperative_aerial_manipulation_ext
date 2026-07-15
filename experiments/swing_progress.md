@@ -35,7 +35,7 @@ Configs on the C recipe. New physics default: `require_upsweep=True`, `swing_ass
 | R5 | ALC | mls0.0 + impact_up16 | — | — | — | — | — | training (mls0.0 losing branch) |
 | S1 | ALC | ≈R1 + aimed-upsweep (aim_k3) | — | — | — | — | — | training ~15k (mls0.0; note: missing R2 alive/prox/hold flags) |
 | S2 | ALC | ≈R2 + aimed-upsweep (aim_k3) | — | — | — | — | — | training ~15k (mls-0.5; CONFOUNDED: missing R2 alive/prox/hold-curric flags) |
-| **U1** | ALC | R2 recipe + **aimed + WIDE radius (0.25→0.13/200k)** | — | — | — | — | — | 🆕 both levers on exact R2 recipe; 96 envs (GPU headroom) |
+| **U1** | ALC | R2 recipe + aimed + **WIDE radius (0.25→0.13/200k)** | 47.5k (24% anneal) | 0.011 @0.13 / **0.030 @0.22** | **0.52** | 87% | +0.55 | 🔬 big swing (amp **0.84m**); loose 0.22m radius only 2× catch ⇒ **AIM scatter, not radius, is the limiter**; best HOLD so far. Still mid-anneal — re-eval at ~150k (radius≈0.13) |
 
 ## Improvement log (newest first)
 - **2026-07-15 ~05:15 — ❌ NEGATIVE RESULTS: R2 collapses past peak; aimed-upsweep reward does NOT help. Wide-radius (U1) is the last standing lever.**
