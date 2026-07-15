@@ -5,6 +5,20 @@
 **Physicality metric** (`diag_catch.py`, at the catch instant): `v_up` = hook upward velocity; **up-sweep%** = fraction of catches with v_up > 0.2 m/s. Real swing → high up-sweep%, v_up ≫ 0. Creep → v_up ≈ 0.
 
 **Eval** = `eval_goals.py` (spawn-fixed, STRICT detach, radius 0.13) for catch/hold + `diag_catch.py` for physicality.
+**MAPPO eval (NEW, hook-blind, source of truth)** = `scripts/hook_grasp/eval_mappo.py --checkpoint <agent_N.pt>` — loads the CTDE actor only (135-dim hook-free obs, asserted), deterministic, all curricula+assist OFF, radius pinned 0.13, hold measured @100. Judge every MAPPO checkpoint with THIS, not TB attached_frac.
+
+---
+
+## AUTONOMOUS IMPROVEMENT FLEET (2026-07-15 18:45 → 2026-07-16 11:00)
+Rulebook = `experiments/AGENT_CONSTITUTION.md` (binding: never change task / 135-dim actor obs / 180-dim critic state / catch-detach physics / success thresholds; only rewards·curricula·HP·spawn-fields). wandb project `hook-grasp-mappo`.
+
+- **2026-07-15 18:45 — REALITY CHECK from new eval_mappo.py.** v24H2 @55k on the TRUE task (all curricula+assist OFF): **catch 0.041, attached_frac 0.0065, hold|caught 0.5 (n=8 noisy), jerk 387N.** TB metrics (catch 0.35, af 0.052) are ~8× curriculum/assist-inflated. ⇒ **catch, not hold, is the binding constraint** (0.04 ≪ 0.30). Re-prioritized queue toward catch levers. eval_mappo.py verified (actor 135-dim confirmed, 2 build bugs fixed, skrl patch already applied).
+- **HP verdict (mid-run TB):** wide clip(0.2)+entropy(0.004) [H2] ≫ conservative defaults [MA1 collapsed af 0.006@123k]. H2 = new base config.
+- **Gen-25 launched (build on H2 base):**
+  - **v25A1_nopull** — `wall_pull_weight=0.0` (remove sole catch-antagonistic hold term; V-wave proved it collapses catch, H2 unknowingly ran it at 8.0). Attacks catch+tradeoff.
+  - **v25A2_kladapt** — KL-adaptive actor LR (`learning_rate_scheduler_actor=KLAdaptiveLR kl_threshold 0.01`). Anti-collapse throttle.
+  - **v25A3_basin** — deepen caught basin / shallow hover basin (`proximity 1.0 alive 0.6 progress 16 lock 8`). Attacks collapse mechanism (dense-shaping dominance).
+- **Queued (catch-first):** C2 persist-catch-freq (slower curricula), C3 pump maneuver (MAPPO-fresh), A4 entropy0.006+lowLR. **Hold levers deferred** until catch clears ~0.2: B1 dynamic attached-spawn (needs 3-line code, agent dispatched), A5 detach_penalty, B2 taut-standoff basin.
 
 ---
 
