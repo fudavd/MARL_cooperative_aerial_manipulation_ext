@@ -182,7 +182,7 @@ class MARLHookGraspEnv(DirectMARLEnv):
             for key in [
                 "approach", "proximity", "impact_perp", "impact_up",
                 "catch", "success", "alive", "death", "lock", "tension", "wall_pull", "progress", "detach",
-                "action_smoothness", "body_rate_penalty", "force_penalty", "downwash", "swing_limit",
+                "action_smoothness", "body_rate_penalty", "force_penalty", "downwash", "swing_limit", "pump",
             ]
         }
         self.metrics = {
@@ -608,6 +608,7 @@ class MARLHookGraspEnv(DirectMARLEnv):
         wall_pull = torch.zeros(self.num_envs, device=self.device)
         progress = torch.zeros(self.num_envs, device=self.device)
         swing_limit = torch.zeros(self.num_envs, device=self.device)
+        pump = torch.zeros(self.num_envs, device=self.device)
         for i in range(self._num_drones):
             drone_pos = self.drone_positions[:, i]
             hook_pos = self.hook_positions[:, i]
@@ -698,6 +699,27 @@ class MARLHookGraspEnv(DirectMARLEnv):
             # ATTACHED so the catch approach can still move toward the wall.
             v_drone_normal = (self.drone_linear_velocities[:, i] * wall_normal).sum(-1)   # + = away, - = into wall
             wall_pull += self.cfg.wall_pull_weight * torch.clamp(-v_drone_normal, min=0.0) * attached.float()
+
+            # --- pendulum PUMP shaping (config-gated): guide the drone's OWN motion into a repeatable
+            # pump-release-lift so the swing timing is CONSISTENT (vs scattershot up-sweeps). Two terms:
+            #   (1) LOAD  -- charge toward the wall (drone_toward) while the hook TRAILS BEHIND (rel*wall_normal>0):
+            #       stores pendulum energy. Far field only (hook not yet at contact). Decays with the curriculum.
+            #   (2) LIFT  -- drone RISES (drone_up), concentrated at the bar (exp(-aim_k*hook_bar)): the taut wire
+            #       whips the hook UP onto the bar (the "lift as it hits" timing). Rewards the CONTROLLABLE action
+            #       (drone lift) that produces the hook up-sweep, a more direct signal than the hook's own v_up.
+            # The STOP/REVERSE that whips the hook forward is left to EMERGE as the bridge between (1) and (2).
+            if self.cfg.reward_pump:
+                rel = hook_pos - drone_pos                                       # hook relative to the drone pivot
+                hook_behind = torch.clamp((rel * wall_normal).sum(-1), min=0.0)  # + when hook is OUTWARD (loaded)
+                drone_toward = torch.clamp(-v_drone_normal, min=0.0)            # drone charging the wall
+                drone_up = torch.clamp((self.drone_linear_velocities[:, i] * self.wall_up_w).sum(-1), min=0.0)
+                far = (hook_bar > self.cfg.impact_range).float()
+                near = torch.exp(-self.cfg.upsweep_aim_k * hook_bar)
+                w_wind = self.cfg.pump_windup_weight
+                if self.cfg.pump_windup_decay:
+                    w_wind = w_wind * (1.0 - self._spawn_frac())               # bootstrap then fade
+                pump += w_wind * drone_toward * hook_behind * far * not_att
+                pump += self.cfg.pump_lift_weight * drone_up * near * not_att
             # --- progress: dense "percentage toward success" = hold_counter / hold_req in [0,1]. Ramps UP each
             # held step and drops to 0 the instant the hook is lost (hold_counter resets in _update_attachment).
             progress += (self.hold_counter[:, i].float() / max(1, self._current_hold_req)).clamp(0.0, 1.0)
@@ -717,6 +739,7 @@ class MARLHookGraspEnv(DirectMARLEnv):
         r_wall_pull = -wall_pull * dt                           # penalty for pulling INTO the wall while attached
         r_progress = self.cfg.progress_weight * progress * dt   # "percentage toward success" per step (resets on loss)
         r_swing_limit = -swing_limit * dt
+        r_pump = pump * dt                                      # pendulum pump-release-lift shaping (see loop)
 
         # CONSISTENT event bonuses (applied EVERY attach / detach, NOT one-off): +catch_bonus on each attach,
         # -detach_penalty on each detach. The two are BALANCED (equal magnitude, cfg), so a spurious
@@ -763,7 +786,7 @@ class MARLHookGraspEnv(DirectMARLEnv):
             "alive": r_alive, "death": r_death,
             "lock": r_lock, "tension": r_tension, "wall_pull": r_wall_pull, "progress": r_progress,
             "action_smoothness": r_smooth, "body_rate_penalty": r_body_rate, "force_penalty": r_effort,
-            "downwash": r_downwash, "swing_limit": r_swing_limit,
+            "downwash": r_downwash, "swing_limit": r_swing_limit, "pump": r_pump,
         }
         for k, v in reward_terms.items():
             self._episode_sums[k] += v
@@ -1018,6 +1041,13 @@ class MARLHookGraspEnv(DirectMARLEnv):
             vel[:, 0] = -normal_w[:, 0] * assist                              # horizontal, toward the wall
             vel[:, 1] = -normal_w[:, 1] * assist
             vel[:, 2] = assist * self.cfg.swing_assist_up                     # small UP kick to seed the up-sweep
+        # inverse-spawn RUNWAY: seed an AWAY-from-wall velocity (+normal_w) so the drone must fly IN toward the
+        # wall, which trails the hook BEHIND -> naturally loads the pendulum for the pump maneuver. Decays like the
+        # assist. Pairs with reward_pump; off (0) by default.
+        if self.cfg.spawn_away_v0 > 0.0:
+            away = self.cfg.spawn_away_v0 * (1.0 - frac)
+            vel[:, 0] += normal_w[:, 0] * away
+            vel[:, 1] += normal_w[:, 1] * away
         self.robot.write_root_velocity_to_sim(vel, env_ids)
 
     def _attached_spawn_reset(self, env_ids):

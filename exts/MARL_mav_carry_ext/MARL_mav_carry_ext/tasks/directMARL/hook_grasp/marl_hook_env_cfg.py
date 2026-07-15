@@ -300,6 +300,20 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
     reward_aimed_upsweep: bool = False
     upsweep_aim_k: float = 3.0    # exp(-k*hook_bar_dist): ~0.55@0.2m, ~0.26@0.45m -> concentrates the up-reward at the bar
 
+    # PENDULUM PUMP shaping (raises catch via a REPEATABLE pump-release-lift maneuver -> consistent swing timing,
+    # vs scattershot up-sweeps). Two shaping terms on the drone's OWN (controllable) motion; the "stop/reverse to
+    # whip the hook forward" phase EMERGES as the bridge between them (not hard-coded -> avoids reward-hacking):
+    #   (1) LOAD: charge toward the wall with the hook trailing BEHIND (rel*wall_normal>0) -> stores pendulum energy
+    #   (2) LIFT: drone rises (v_drone*wall_up>0) concentrated at the bar -> the taut wire whips the hook UP onto it
+    # Gated to the unattached phase. windup DECAYS with the spawn curriculum (bootstrap the strategy, then refine).
+    reward_pump: bool = False
+    pump_windup_weight: float = 1.5   # (1) LOAD: drone_toward[m/s] * hook_behind[m], far field (hook_bar>impact_range)
+    pump_lift_weight: float = 2.0     # (2) LIFT: drone_up[m/s] * exp(-upsweep_aim_k*hook_bar), the seating timing
+    pump_windup_decay: bool = True    # scale windup by (1-spawn_frac): strong at curriculum start, ~0 at eval/frac=1
+    # inverse-spawn RUNWAY: seed an initial AWAY-from-wall drone velocity so it must fly IN, naturally loading the
+    # hook behind (the "approach with perpendicular velocity" seed). Decays with the curriculum like swing assist.
+    spawn_away_v0: float = 0.0        # m/s away-from-wall initial drone speed at curriculum start (frac=0); pairs w/ pump
+
     # Attaching / holding = the PRIMARY objective. Rewards:
     #   * catch_bonus  : +bonus on EVERY attach event (not one-off) -> lure to actually engage the hook,
     #   * detach_penalty: -penalty on EVERY detach event, BALANCED (== catch_bonus) so an attach->detach cycle
