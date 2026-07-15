@@ -28,8 +28,20 @@ Configs on the C recipe. New physics default: `require_upsweep=True`, `swing_ass
 | Q1 | local | assist2.2+up16+gate0.08 | — | — | — | — | — | FAILED to launch (empty log); GPU reused for P3 eval |
 | Q2 | ALC | assist2.6, gate0.08 | — | — | — | — | — | early, af~0.03 (weaker than P3) |
 | Q3 | ALC | assist2.2, gate0.08, slow-decay | — | — | — | — | — | early, af~0.06 |
+| **R2** | ALC | mod-explore mls-0.5, assist2.2/gate0.08 | 27.5k | **0.0072** | **0.61** | **85%** | **+0.70** | ✅ GENUINE SWING (amp 0.79m) — physics solved; catch precision is the gap |
+| R1 | ALC | mod-explore mls0.0 | — | — | — | — | — | training ~40k/750k |
+| R3 | ALC | mls0.0 + low-entropy | — | — | — | — | — | training ~40k |
+| R4 | ALC | mls0.5 | — | — | — | — | — | training ~40k |
+| R5 | ALC | mls0.0 + impact_up16 | — | — | — | — | — | training ~40k |
+| **S1** | ALC | R1 + **aimed-upsweep** (aim_k3) | — | — | — | — | — | 🆕 A/B: does aimed reward raise catch? (mls0.0) |
+| **S2** | ALC | R2 + **aimed-upsweep** (aim_k3) | — | — | — | — | — | 🆕 A/B: aimed vs R2 at matched mls-0.5 |
 
 ## Improvement log (newest first)
+- **2026-07-15 ~10:30 — ✅ PHYSICS SOLVED, precision is the remaining gap. Committed aimed-upsweep reward.** R2 (moderate exploration mls=-0.5) DETERMINISTIC eval = **genuine pendulum swing**: v_up +0.70, 85% up-sweep, amplitude 0.79m (≈ real 0.55m-wire arc), hold-given-caught 0.61. This is the physically-correct behaviour the user asked for — the drone up-swings the hook onto the bar, no creep (0% creep-like catches). BUT deterministic catch only 0.0072 → the swing is genuine but doesn't reliably *connect* with the bar (aiming/precision, not physicality).
+  - **Reward fix (committed `bac7e6d`):** `reward_aimed_upsweep` — reward the up-stroke weighted by `exp(-k·hook_bar_dist)` so the swing is rewarded most when it peaks ON the bar (not merely inside the coarse impact box). Config-gated (default off; R-wave unaffected). Smoke-validated 160/160, 0 errors.
+  - **S-WAVE launched (ALC, alongside R-wave):** S1 = R1 config (mls0.0) + aimed-upsweep, S2 = R2 config (mls-0.5) + aimed-upsweep, both aim_k=3.0, assist2.2/gate0.08. Clean A/B — R1 vs S1 and R2 vs S2 at matched exploration isolate the aimed-reward effect on catch precision.
+  - **Eval plan:** let R+S mature to ~55k (peak), deterministic eval_goals + diag_catch on all; pick highest catch that keeps up-sweep% ≫ 80% (must stay physical).
+
 - **2026-07-15 ~01:25 — ⚠️ KEY REFRAME: training attached_frac was EXPLORATION NOISE, not learned skill.** P3@55k DETERMINISTIC eval: **catch 0.0007** (≈0!) vs training af 0.125. diag_catch: only 5 catches, but they ARE up-sweeps (v_up +0.22, 60% up-sweep, 0% creep) with swing amplitude **1.3 m ≫ 0.55 m wire** = wild flailing. Root cause: the ALC regime `max_log_std=2.0` (std→7.4) + entropy 0.005 keeps the policy CHAOTIC — it catches by luck in training, but the mean/deterministic policy hasn't learned a controlled swing. The up-sweep-required catch + assist are working (catches are real up-sweeps), but exploration is too high to converge to a repeatable maneuver.
   - **PIVOT: strong assist (2.2, gate0.08) + MODERATE exploration** (assist provides structured exploration; low action-noise → learnable controlled swing). Killing the chaos-regime arms; launching R-wave bracketing max_log_std ∈ {-0.5, 0.0, 0.5} + low-entropy + strong up-sweep reward, all on assist2.2/gate0.08.
   - **Eval rule going forward: judge by DETERMINISTIC catch (eval_goals), NOT training attached_frac** (the latter is inflated by exploration noise in the high-std regime).
