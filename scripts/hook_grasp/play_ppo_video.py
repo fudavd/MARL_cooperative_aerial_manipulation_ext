@@ -27,6 +27,7 @@ parser.add_argument("--steps", type=int, default=600, help="Rollout steps to rec
 parser.add_argument("--frame_every", type=int, default=4, help="Capture a frame every N steps.")
 parser.add_argument("--fps", type=int, default=15, help="Output video fps.")
 parser.add_argument("--seed", type=int, default=7, help="Seed.")
+parser.add_argument("--state_obs", action="store_true", default=False, help="Match checkpoint training obs.")
 parser.add_argument("--capture_radius", type=float, default=-1.0, help="Override catch radius (m); <0=cfg.")
 parser.add_argument("--slack_dwell_steps", type=int, default=-1, help="Override detach grace; <0=base(5).")
 parser.add_argument("--detach_p_vertical", type=float, default=-1.0, help="Override vertical detach prob; <0=base(1.0).")
@@ -89,7 +90,7 @@ def main():
     base = env.unwrapped  # MARLHookGraspEnv; render() from here reflects live physics
     # PPO is single-agent: wrap exactly like scripts/skrl/play.py so the agent gets the right obs/action
     if isinstance(base, DirectMARLEnv):
-        env = multi_agent_to_single_agent(env, state_as_observation=True)
+        env = multi_agent_to_single_agent(env, state_as_observation=args_cli.state_obs)
     env = SkrlVecEnvWrapper(env, ml_framework=args_cli.ml_framework)
 
     experiment_cfg["trainer"]["close_environment_at_exit"] = False

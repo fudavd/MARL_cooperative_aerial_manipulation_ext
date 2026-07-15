@@ -54,6 +54,10 @@ parser.add_argument(
     "(forces replicate_physics=False -> full DR, each env its own cable attachment).",
 )
 parser.add_argument("--wandb", action="store_true", default=False, help="Log the run to Weights & Biases.")
+parser.add_argument("--state_obs", action="store_true", default=False,
+                    help="Feed the privileged STATE (incl. hook pos/vel/hook->bar) as the policy observation. "
+                         "DEFAULT FALSE: the policy sees only the hook-free actor obs (drone+basket+wall-centre) "
+                         "-> the hook state is NOT given to the policy (realistic; a real drone lacks hook truth).")
 parser.add_argument(
     "--wandb_project", type=str, default="mappo-flycrane-rand", help="W&B project name (used when --wandb)."
 )
@@ -242,7 +246,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # convert to single-agent instance if required by the RL algorithm
     if isinstance(env.unwrapped, DirectMARLEnv) and algorithm in ["ppo"]:
-        env = multi_agent_to_single_agent(env, state_as_observation=True)
+        env = multi_agent_to_single_agent(env, state_as_observation=args_cli.state_obs)
 
     # wrap around environment for skrl
     env = SkrlVecEnvWrapper(env, ml_framework=args_cli.ml_framework)  # same as: `wrap_env(env, wrapper="auto")`

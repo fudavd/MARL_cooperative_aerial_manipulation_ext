@@ -41,6 +41,9 @@ parser.add_argument("--slack_dwell_steps", type=int, default=-1, help="Override 
 parser.add_argument("--detach_p_vertical", type=float, default=-1.0, help="Override vertical detach prob; <0 = use cfg (base=1.0).")
 parser.add_argument("--detach_p_horizontal", type=float, default=-1.0, help="Override horizontal detach prob; <0 = use cfg (base=0.2).")
 parser.add_argument("--seed", type=int, default=12345, help="Seed.")
+parser.add_argument("--state_obs", action="store_true", default=False,
+                    help="Feed privileged STATE (incl. hook) as policy obs. Must MATCH how the checkpoint was "
+                         "trained. Default False = hook-free policy obs (new convention).")
 parser.add_argument("--out", type=str, default="", help="Optional path to write a JSON result.")
 parser.add_argument("--ml_framework", type=str, default="torch", choices=["torch", "jax", "jax-numpy"])
 AppLauncher.add_app_launcher_args(parser)
@@ -92,7 +95,7 @@ def main():
     env = gym.make(args_cli.task, cfg=env_cfg)
     base = env.unwrapped
     if isinstance(base, DirectMARLEnv):
-        env = multi_agent_to_single_agent(env, state_as_observation=True)
+        env = multi_agent_to_single_agent(env, state_as_observation=args_cli.state_obs)
     env = SkrlVecEnvWrapper(env, ml_framework=args_cli.ml_framework)
 
     experiment_cfg["trainer"]["close_environment_at_exit"] = False

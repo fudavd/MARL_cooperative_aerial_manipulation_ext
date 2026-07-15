@@ -25,6 +25,7 @@ parser.add_argument("--detach_p_vertical", type=float, default=-1.0)
 parser.add_argument("--detach_p_horizontal", type=float, default=-1.0)
 parser.add_argument("--require_upsweep", type=int, default=-1)
 parser.add_argument("--seed", type=int, default=7)
+parser.add_argument("--state_obs", action="store_true", default=False)
 parser.add_argument("--ml_framework", type=str, default="torch")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, _ = parser.parse_known_args()
@@ -52,7 +53,7 @@ env_cfg.hold_success_steps = 10_000_000  # never self-terminate on hold
 
 exp = load_cfg_from_registry(args_cli.task, "skrl_cfg_entry_point")
 env = gym.make(args_cli.task, cfg=env_cfg); base = env.unwrapped
-if isinstance(base, DirectMARLEnv): env = multi_agent_to_single_agent(env, state_as_observation=True)
+if isinstance(base, DirectMARLEnv): env = multi_agent_to_single_agent(env, state_as_observation=args_cli.state_obs)
 env = SkrlVecEnvWrapper(env, ml_framework=args_cli.ml_framework)
 exp["trainer"]["close_environment_at_exit"] = False
 exp["agent"]["experiment"]["write_interval"] = 0; exp["agent"]["experiment"]["checkpoint_interval"] = 0
