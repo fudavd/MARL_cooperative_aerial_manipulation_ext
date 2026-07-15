@@ -1112,7 +1112,13 @@ class MARLHookGraspEnv(DirectMARLEnv):
         quat = quat_from_euler_xyz(zeros, zeros, yaw)
         world_pos = drone_w + self.scene.env_origins[sub]
         self.robot.write_root_pose_to_sim(torch.cat([world_pos, quat], dim=-1), sub)
-        self.robot.write_root_velocity_to_sim(torch.zeros(n, 6, device=self.device), sub)
+        # velocity: static hold pose by default; if attached_spawn_v0 > 0, impart a residual up-and-out speed
+        # (along the SAME steady_dir used to place the drone) so hold is bootstrapped from a dynamic post-swing
+        # state instead of a dead-static one. Angular velocity stays zero. v0 == 0.0 -> byte-for-byte static.
+        vel = torch.zeros(n, 6, device=self.device)
+        if self.cfg.attached_spawn_v0 > 0.0:
+            vel[:, :3] = self.cfg.attached_spawn_v0 * steady_dir
+        self.robot.write_root_velocity_to_sim(vel, sub)
         # set the ATTACHMENT state: pinned to the bar, latched; hold counter starts at 0 (policy must sustain it)
         self.attached[sub, i] = True
         self.attach_point_w[sub, i] = bar_w

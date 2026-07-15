@@ -254,6 +254,7 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
     attached_spawn_out: float = 0.5      # steady pose dir = normalize(out*n_wall + up*z); horizontal (out) share
     attached_spawn_up: float = 0.87      # ... vertical (up) share -> ~30deg from vertical, wire taut, tension holds hook on bar
     attached_spawn_jitter: float = 0.15  # m: max pose jitter at curriculum END (grows 0 -> this with frac) to widen the hold basin
+    attached_spawn_v0: float = 0.0       # residual up-and-out speed (m/s) imparted to the drone at attached-spawn reset, so hold is bootstrapped from a dynamic post-swing state instead of a static pose; 0.0 = static (default, other arms unaffected)
 
     # --- rewards -------------------------------------------------------------------------
     # Redesigned reward (2026-07-09). Structure:
