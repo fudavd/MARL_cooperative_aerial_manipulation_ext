@@ -46,4 +46,9 @@ levers most likely to convert it into catch:
 - **BASE (fixed 50 g, trained fully): v27L3 resid H3 = catch 0.208 / hold 0.944 / jerk 134.** ← THE BASE.
 - reward_norm on fixed tip (v27L5): catch 0.117 / hold 0.967 → **reward_norm HURTS catch, DROPPED.**
 - RESOURCE: user running 2 Hebbian ES on ALC (~10.8 GB, 12 h). → **1 rsl_rl arm at a time, 256 envs.**
-- I1a (base + reward_aimed_upsweep=true,upsweep_aim_k=3.0), 4000 iters — RUNNING.
+- I1a (base + reward_aimed_upsweep) @4000: catch 0.094 / hold 1.0. ≈ base@4000 (0.109) → **neutral, not a win.**
+- **★ KEY: base catch 0.109 @4000 → 0.208 @6000 = STILL CLIMBING STEEPLY (not plateaued).** ⇒ (1) 4000-iter
+  screening is TOO SHORT to judge levers (catch undeveloped); (2) **train-LONGER is the top lever.**
+  → **v28_baseLong10k: RESUME v27L3 model_5999 → +4000 (to 10k).** Eval 7k/8k/9k/10k trajectory for the
+  catch curve toward 0.30. If it plateaus <0.30, THEN test levers (entropy / RNN-512) at a LONG horizon.
+- Screening rule REVISED: judge at >=6000 iters (or resume-extend), not 4000.
