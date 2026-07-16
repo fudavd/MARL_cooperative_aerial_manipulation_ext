@@ -52,3 +52,8 @@ levers most likely to convert it into catch:
   → **v28_baseLong10k: RESUME v27L3 model_5999 → +4000 (to 10k).** Eval 7k/8k/9k/10k trajectory for the
   catch curve toward 0.30. If it plateaus <0.30, THEN test levers (entropy / RNN-512) at a LONG horizon.
 - Screening rule REVISED: judge at >=6000 iters (or resume-extend), not 4000.
+
+## ★ RESULT: GOALS MET (2026-07-17 00:40)
+- baseLong10k (resume v27L3 6k→10k): catch **0.139→0.175→0.244→0.373** @ 7k/8k/9k/10k, hold 0.89→0.97, jerk→107.
+- **catch 0.373 ≥ 0.30 AND hold 0.97 ≥ 0.80 → GOAL. Winning recipe = residual H3 + fixed 50 g tip + F3 + LONG training.**
+- Catch still climbing at 10k → resumed to 14k (v28_baseLong14k). Next: eval 11k/12k/13k/14k; if still climbing, extend further; then optionally test if entropy/RNN-512 push the peak even higher.
