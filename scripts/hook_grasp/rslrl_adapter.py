@@ -26,8 +26,9 @@ from rsl_rl.env import VecEnv
 
 from isaaclab.envs import DirectMARLEnv
 
-ACTOR_OBS_DIM = 135
+ACTOR_OBS_DIM = 135   # default (45 x history_len=3, hook-free); overridden when the INDI-residual obs is enabled
 CRITIC_OBS_DIM = 180
+INDI_RESIDUAL_DIM = 6  # body-frame INDI disturbance residual appended per actor frame when enabled
 
 
 class RslRlMarlAdapter(VecEnv):
@@ -50,10 +51,18 @@ class RslRlMarlAdapter(VecEnv):
         # prime the env so get_observations() is valid before the first step (runner reads it at init)
         obs, self._extras = self._reset_env()
 
-        # hard asymmetry assertions -- the whole point of this backend
+        # hard asymmetry assertions -- the whole point of this backend. The actor dim is whatever the env cfg
+        # declares (default 135 hook-free; larger when the INDI-residual obs / a different actor H is enabled),
+        # so assert the live obs matches the DECLARED observation space rather than a fixed constant. The critic
+        # stays privileged 180-dim regardless (its history_len is untouched by the actor-side knobs).
         actor_dim = int(obs.shape[-1])
         critic_dim = int(self._extras["observations"]["critic"].shape[-1])
-        assert actor_dim == ACTOR_OBS_DIM, f"actor obs must be {ACTOR_OBS_DIM}-dim hook-free, got {actor_dim}"
+        expected_actor = int(next(iter(env.cfg.observation_spaces.values())))
+        assert actor_dim == expected_actor, (
+            f"actor obs {actor_dim} != declared observation_space {expected_actor} "
+            f"(indi_residual={getattr(env.cfg, 'actor_indi_residual', False)}, "
+            f"actor_history_len={getattr(env.cfg, 'actor_history_len', 0) or env.cfg.history_len})"
+        )
         assert critic_dim == CRITIC_OBS_DIM, f"critic obs must be {CRITIC_OBS_DIM}-dim privileged, got {critic_dim}"
         print(f"[rslrl-adapter] agent={self.agent}  actor_obs={actor_dim}  critic_obs={critic_dim}  "
               f"num_envs={self.num_envs}  num_actions={self.num_actions}")
@@ -195,3 +204,18 @@ def apply_f3_env_cfg(env_cfg) -> None:
     env_cfg.impact_toward_weight = 6.0
     env_cfg.anti_sag_weight = 6.0
     env_cfg.slack_penalty_weight = 20.0
+
+
+def apply_indi_residual_cfg(env_cfg, *, actor_history_len: int, residual: bool = True) -> None:
+    """Enable the INDI-residual actor obs and set the ACTOR-only frame-stack depth H, recomputing dims.
+
+    The actor obs becomes ``(45 + 6*residual) * actor_history_len`` (45 hook-free base + the 6-dim body-frame
+    INDI disturbance residual per frame). The PRIVILEGED critic is left untouched: it keeps ``history_len`` (3)
+    frames -> ``state_space`` stays 180-dim, so only the actor input changes (a clean ablation). Call AFTER
+    ``apply_f3_env_cfg`` and BEFORE ``gym.make`` (DirectMARLEnv reads observation_spaces at construction).
+    """
+    per_frame = 45 + (INDI_RESIDUAL_DIM if residual else 0)
+    env_cfg.actor_indi_residual = bool(residual)
+    env_cfg.actor_history_len = int(actor_history_len)
+    env_cfg.observation_spaces = {a: per_frame * int(actor_history_len) for a in env_cfg.possible_agents}
+    # critic (state_space) is deliberately NOT changed here -- it stays _STATE_DIM * history_len = 180.

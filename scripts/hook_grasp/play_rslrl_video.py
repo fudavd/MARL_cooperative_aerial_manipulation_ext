@@ -31,6 +31,10 @@ parser.add_argument("--env_index", type=int, default=0, help="Which env the foll
 parser.add_argument("--scan", action="store_true", default=False, help="No render; report best-holding env index.")
 parser.add_argument("--out_dir", type=str, default="scripts/hook_grasp/_render_rslrl", help="Output dir.")
 parser.add_argument("--tag", type=str, default="lstm_policy", help="Output file basename.")
+parser.add_argument("--indi_residual", action="store_true", default=False,
+                    help="Actor was trained with the INDI-residual obs (must match the checkpoint).")
+parser.add_argument("--actor_history_len", type=int, default=0,
+                    help="ACTOR frame-stack depth H used in training (0 -> env history_len); must match checkpoint.")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, _ = parser.parse_known_args()
 args_cli.enable_cameras = True
@@ -53,7 +57,7 @@ from isaaclab.envs import DirectMARLEnv
 from isaaclab_tasks.utils import parse_env_cfg
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from rslrl_adapter import RslRlMarlAdapter, make_runner_cfg  # noqa: E402
+from rslrl_adapter import RslRlMarlAdapter, apply_indi_residual_cfg, make_runner_cfg  # noqa: E402
 
 
 def main():
@@ -70,6 +74,11 @@ def main():
         env_cfg.attachment.capture_radius = args_cli.capture_radius
     if hasattr(env_cfg, "hold_success_steps"):
         env_cfg.hold_success_steps = 10_000_000
+
+    # structural actor-obs config (must MATCH the trained checkpoint)
+    if args_cli.indi_residual or args_cli.actor_history_len:
+        H = args_cli.actor_history_len or env_cfg.history_len
+        apply_indi_residual_cfg(env_cfg, actor_history_len=H, residual=args_cli.indi_residual)
 
     # follow-camera on the drone body (same framing as play_mappo_video)
     env_cfg.viewer.origin_type = "asset_body"
@@ -95,8 +104,9 @@ def main():
 
     obs, _ = adapter.get_observations()
     actor_dim = int(obs.shape[-1])
-    print(f"[rslrl-video] actor_obs_dim={actor_dim} (must be 135 hook-free)")
-    assert actor_dim == 135, f"actor obs must be 135-dim hook-free, got {actor_dim}"
+    expected_actor = int(next(iter(base.cfg.observation_spaces.values())))
+    print(f"[rslrl-video] actor_obs_dim={actor_dim} (declared {expected_actor})")
+    assert actor_dim == expected_actor, f"actor obs {actor_dim} != declared {expected_actor} (indi/H mismatch?)"
     policy.reset()
 
     E = base.num_envs

@@ -82,8 +82,12 @@ class MARLHookGraspEnv(DirectMARLEnv):
         )
 
         # --- observation history ----------------------------------------------------------
+        # ACTOR frame-stack depth H is decoupled from the critic's history_len: actor_history_len (0 -> fall
+        # back to history_len) sets the actor CircularBuffer only, so H can be ablated (H=1 vs H=3) while the
+        # privileged critic keeps its own history_len frame-stack (unchanged, 180-dim).
+        self._actor_hist = int(getattr(cfg, "actor_history_len", 0)) or int(cfg.history_len)
         self._observation_buffers = {
-            agent: CircularBuffer(cfg.history_len, self.num_envs, device=self.device)
+            agent: CircularBuffer(self._actor_hist, self.num_envs, device=self.device)
             for agent in self.cfg.possible_agents
         }
 
@@ -107,6 +111,9 @@ class MARLHookGraspEnv(DirectMARLEnv):
         self.drone_angular_accelerations = torch.zeros(self.num_envs, self._num_drones, 3, device=self.device)
         self._drone_jerk = torch.zeros(self.num_envs, self._num_drones, 3, device=self.device)
         self._drone_prev_acc = torch.zeros(self.num_envs, self._num_drones, 3, device=self.device)
+        # latest INDI disturbance residual per drone (body frame, 6): [alpha_cmd-omega_dot | R^T(acc_cmd-a_meas)].
+        # Read from each drone's INDI controller after _apply_action; fed to the actor obs iff cfg.actor_indi_residual.
+        self._indi_residual = torch.zeros(self.num_envs, self._num_drones, 6, device=self.device)
 
         # --- hook state buffers (single hook per drone; for num_drones==1 this is one hook) -------
         self.hook_positions = torch.zeros(self.num_envs, self._num_drones, 3, device=self.device)
@@ -280,6 +287,8 @@ class MARLHookGraspEnv(DirectMARLEnv):
                 target_rpm = self._indi_controllers[i].getCommand(
                     ds, self._forces[:, i * 4 : i * 4 + 4], alpha_cmd, acc_cmd, acc_load
                 )
+                # cache the INDI disturbance residual (hook/wire wrench sensed onboard) for the optional actor obs
+                self._indi_residual[:, i] = self._indi_controllers[i].disturbance_residual
                 thrusts, moments = self.motor_models[i].get_motor_thrusts_moments(target_rpm, self.sampling_time)
                 all_thrusts.append(thrusts)
                 all_moments.append(moments)
@@ -518,20 +527,22 @@ class MARLHookGraspEnv(DirectMARLEnv):
         goal_pos_error = self.pose_command_w[:, :3] - self.basket_pos_w              # goal - load position
         difference_matrix = torch.matmul(goal_matrix, basket_matrix.transpose(-1, -2))
         assigned_wall_center = self._assigned_wall_center(i)                         # (E, 3)  target-wall centre
-        return torch.cat(
-            (
-                self.basket_pos_w,                                       # 3  (load position)
-                basket_matrix.reshape(self.num_envs, 9),                 # 9  (load orientation matrix)
-                assigned_wall_center,                                    # 3  (assigned-wall centre, replaces id)
-                self.drone_positions[:, i],                              # 3
-                self.drone_rot_matrices[:, i].reshape(self.num_envs, 9), # 9
-                self.drone_linear_velocities[:, i],                     # 3
-                self.drone_angular_velocities[:, i],                    # 3
-                goal_pos_error,                                          # 3  (goal - load position)
-                difference_matrix.reshape(self.num_envs, 9),            # 9  (goal-vs-load orientation)
-            ),
-            dim=-1,
-        )
+        parts = [
+            self.basket_pos_w,                                       # 3  (load position)
+            basket_matrix.reshape(self.num_envs, 9),                 # 9  (load orientation matrix)
+            assigned_wall_center,                                    # 3  (assigned-wall centre, replaces id)
+            self.drone_positions[:, i],                              # 3
+            self.drone_rot_matrices[:, i].reshape(self.num_envs, 9), # 9
+            self.drone_linear_velocities[:, i],                     # 3
+            self.drone_angular_velocities[:, i],                    # 3
+            goal_pos_error,                                          # 3  (goal - load position)
+            difference_matrix.reshape(self.num_envs, 9),            # 9  (goal-vs-load orientation)
+        ]                                                            # = 45 (hover-matching, hook-free)
+        # Optional 6-dim INDI disturbance residual (hook/wire wrench sensed onboard; force/phase, NOT position).
+        # Keeps the actor position-blind while giving it the hook DYNAMICS it needs to time the up-sweep.
+        if getattr(self.cfg, "actor_indi_residual", False):
+            parts.append(self._indi_residual[:, i])                 # 6
+        return torch.cat(parts, dim=-1)
 
     def _get_states(self) -> torch.Tensor:
         # Centralized-critic state (CTDE): the actor obs is deliberately restricted to the hover-matching 45

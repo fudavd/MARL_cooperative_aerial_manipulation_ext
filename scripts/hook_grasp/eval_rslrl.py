@@ -31,6 +31,10 @@ parser.add_argument("--hold_steps", type=int, default=100, help="Consecutive att
 parser.add_argument("--capture_radius", type=float, default=0.13, help="Catch radius (m); FINAL task value = 0.13.")
 parser.add_argument("--seed", type=int, default=12345, help="Seed.")
 parser.add_argument("--out", type=str, default="", help="Optional path to write a JSON result.")
+parser.add_argument("--indi_residual", action="store_true", default=False,
+                    help="Actor was trained with the INDI-residual obs (must match the checkpoint).")
+parser.add_argument("--actor_history_len", type=int, default=0,
+                    help="ACTOR frame-stack depth H used in training (0 -> env history_len); must match checkpoint.")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, _ = parser.parse_known_args()
 sys.argv = [sys.argv[0]]
@@ -52,7 +56,7 @@ from isaaclab.envs import DirectMARLEnv
 from isaaclab_tasks.utils import parse_env_cfg
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from rslrl_adapter import RslRlMarlAdapter, make_runner_cfg  # noqa: E402
+from rslrl_adapter import RslRlMarlAdapter, apply_indi_residual_cfg, make_runner_cfg  # noqa: E402
 
 
 def main():
@@ -69,6 +73,12 @@ def main():
     # disable the env's own hold-success termination; we measure the hold ourselves.
     if hasattr(env_cfg, "hold_success_steps"):
         env_cfg.hold_success_steps = 10_000_000
+
+    # structural actor-obs config (NOT a curriculum): must MATCH the trained checkpoint so the loaded net's
+    # input dim lines up. Leaves the critic 180-dim.
+    if args_cli.indi_residual or args_cli.actor_history_len:
+        H = args_cli.actor_history_len or env_cfg.history_len
+        apply_indi_residual_cfg(env_cfg, actor_history_len=H, residual=args_cli.indi_residual)
 
     env = gym.make(args_cli.task, cfg=env_cfg)
     base = env.unwrapped
@@ -92,7 +102,8 @@ def main():
     actor_dim = int(obs.shape[-1])
     state_dim = int(base.state().shape[-1])
     print(f"[eval-rslrl] agent={adapter.agent}  actor_obs_dim={actor_dim}  critic_state_dim={state_dim}")
-    assert actor_dim == 135, f"actor obs must be 135-dim hook-free, got {actor_dim}"
+    expected_actor = int(next(iter(base.cfg.observation_spaces.values())))
+    assert actor_dim == expected_actor, f"actor obs {actor_dim} != declared {expected_actor} (indi/H mismatch?)"
     assert state_dim == 180, f"critic state expected 180-dim, got {state_dim}"
 
     policy.reset()  # zero the LSTM hidden state for all envs

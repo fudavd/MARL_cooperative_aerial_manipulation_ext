@@ -107,6 +107,17 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
     partial_obs = True
     history_len = _HISTORY_LEN
 
+    # --- optional INDI disturbance-residual actor observation (real-drone-honest hook signal) ---------------
+    # When ``actor_indi_residual`` is on, each ACTOR frame is extended by the 6-dim body-frame INDI disturbance
+    # residual (angular INDI increment alpha_cmd-omega_dot + linear commanded-vs-measured specific force; see
+    # IndiController.disturbance_residual). This is what the onboard IMU/INDI measures of the hook+wire wrench --
+    # it carries the hook DYNAMICS (force/phase) but NO hook or wall POSITION, so the actor stays position-blind.
+    # ``actor_history_len`` decouples the ACTOR frame-stack depth H from the critic's history_len (which stays
+    # _HISTORY_LEN=3, keeping the privileged critic 180-dim): 0 -> fall back to history_len; else H frames for the
+    # actor only. Set BOTH via rslrl_adapter.apply_indi_residual_cfg (it also recomputes observation_spaces).
+    actor_indi_residual: bool = False
+    actor_history_len: int = 0            # 0 -> use history_len; else the ACTOR-only frame-stack depth H
+
     # per-frame observation layout = the hover/transport partial obs (see _drone_obs_frame). basket = "load",
     # pose_command = "goal":
     #   load(basket) pos (3) + rot matrix (9)                                   = 12

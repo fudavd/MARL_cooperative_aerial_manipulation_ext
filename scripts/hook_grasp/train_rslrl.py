@@ -37,6 +37,10 @@ parser.add_argument("--experiment_name", type=str, default="v26L1_lstm", help="E
 parser.add_argument("--wandb", action="store_true", default=False, help="Log to Weights & Biases.")
 parser.add_argument("--wandb_project", type=str, default="hook-grasp-rnn", help="W&B project name.")
 parser.add_argument("--resume", type=str, default="", help="Path to a checkpoint to resume from.")
+parser.add_argument("--indi_residual", action="store_true", default=False,
+                    help="Feed the 6-dim body-frame INDI disturbance residual (hook/wire wrench) to the LSTM actor.")
+parser.add_argument("--actor_history_len", type=int, default=0,
+                    help="ACTOR-only frame-stack depth H (0 -> use env history_len). Critic stays 180-dim.")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, _ = parser.parse_known_args()
 sys.argv = [sys.argv[0]]
@@ -59,7 +63,12 @@ from isaaclab_tasks.utils import parse_env_cfg
 
 # local imports (this script's dir is on sys.path when run directly)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from rslrl_adapter import RslRlMarlAdapter, apply_f3_env_cfg, make_runner_cfg  # noqa: E402
+from rslrl_adapter import (  # noqa: E402
+    RslRlMarlAdapter,
+    apply_f3_env_cfg,
+    apply_indi_residual_cfg,
+    make_runner_cfg,
+)
 
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
@@ -70,6 +79,11 @@ def main():
     env_cfg = parse_env_cfg(args_cli.task, device=device, num_envs=args_cli.num_envs)
     env_cfg.seed = args_cli.seed
     apply_f3_env_cfg(env_cfg)
+    if args_cli.indi_residual or args_cli.actor_history_len:
+        H = args_cli.actor_history_len or env_cfg.history_len
+        apply_indi_residual_cfg(env_cfg, actor_history_len=H, residual=args_cli.indi_residual)
+        print(f"[train-rslrl] INDI-residual actor obs: residual={args_cli.indi_residual}  H={H}  "
+              f"actor_obs_dim={next(iter(env_cfg.observation_spaces.values()))}")
 
     env = gym.make(args_cli.task, cfg=env_cfg)
     base = env.unwrapped
