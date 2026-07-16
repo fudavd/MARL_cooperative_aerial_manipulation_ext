@@ -23,6 +23,7 @@ from __future__ import annotations
 import torch
 
 from rsl_rl.env import VecEnv
+from rsl_rl.modules.normalizer import EmpiricalDiscountedVariationNormalization
 
 from isaaclab.envs import DirectMARLEnv
 
@@ -34,9 +35,18 @@ INDI_RESIDUAL_DIM = 6  # body-frame INDI disturbance residual appended per actor
 class RslRlMarlAdapter(VecEnv):
     """Expose a single-agent DirectMARLEnv to rsl_rl with an asymmetric (privileged) critic obs."""
 
-    def __init__(self, env: DirectMARLEnv):
+    def __init__(self, env: DirectMARLEnv, *, reward_norm: bool = False, gamma: float = 0.99):
         assert isinstance(env, DirectMARLEnv), "RslRlMarlAdapter expects a DirectMARLEnv."
         self.env = env
+        # Optional Pathak reward normalization: divide the per-step reward by a running std of the DISCOUNTED
+        # return, so the value function sees a ~stationary return SCALE even as the curriculum shifts reward
+        # reachability (capture radius tightening, hold_req ramping, attached-spawn decaying). Addresses the
+        # "value function chases a moving return scale at each curriculum level shift" failure. Training-only;
+        # eval/play never train the critic so they leave this off (the policy net is unaffected).
+        self._rew_norm = None
+        if reward_norm:
+            self._rew_norm = EmpiricalDiscountedVariationNormalization(shape=[], gamma=gamma).to(env.device)
+            self._rew_norm.train()
         self.agents = list(env.possible_agents)
         assert len(self.agents) == 1, f"adapter is single-agent; got possible_agents={self.agents}"
         self.agent = self.agents[0]
@@ -108,6 +118,8 @@ class RslRlMarlAdapter(VecEnv):
 
         obs = obs_dict[self.agent]
         rewards = rew_dict[self.agent].view(self.num_envs)
+        if self._rew_norm is not None:
+            rewards = self._rew_norm(rewards)  # scale-only: keeps the return scale stationary across curriculum shifts
         terminated = term_dict[self.agent].view(self.num_envs)
         time_outs = tout_dict[self.agent].view(self.num_envs)
         dones = (terminated | time_outs).float()

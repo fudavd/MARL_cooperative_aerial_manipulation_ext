@@ -41,6 +41,9 @@ parser.add_argument("--indi_residual", action="store_true", default=False,
                     help="Feed the 6-dim body-frame INDI disturbance residual (hook/wire wrench) to the LSTM actor.")
 parser.add_argument("--actor_history_len", type=int, default=0,
                     help="ACTOR-only frame-stack depth H (0 -> use env history_len). Critic stays 180-dim.")
+parser.add_argument("--reward_norm", action="store_true", default=False,
+                    help="Pathak reward normalization: divide reward by running discounted-return std so the "
+                         "value function sees a stationary return scale across curriculum level shifts.")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, _ = parser.parse_known_args()
 sys.argv = [sys.argv[0]]
@@ -88,7 +91,10 @@ def main():
     env = gym.make(args_cli.task, cfg=env_cfg)
     base = env.unwrapped
     assert isinstance(base, DirectMARLEnv), "train_rslrl expects a DirectMARLEnv (multi-agent) task."
-    adapter = RslRlMarlAdapter(base)
+    adapter = RslRlMarlAdapter(base, reward_norm=args_cli.reward_norm)
+    if args_cli.reward_norm:
+        print("[train-rslrl] reward normalization ON (Pathak discounted-return-std): value fn sees a "
+              "stationary return scale across curriculum shifts")
 
     train_cfg = make_runner_cfg(
         experiment_name=args_cli.experiment_name,
