@@ -104,7 +104,15 @@ if __name__ == "__main__":
     # os._exit(0) avoids the Isaac headless teardown hang (simulation_app.close() lingers and holds the
     # GPU, leaving a zombie after every run — bad on the shared ALC card). Checkpoints + wandb per-iter
     # logs are already flushed inside runner.learn() before main() returns. Same pattern as eval_rslrl.py.
+    # BUT os._exit skips wandb's atexit -> the run shows "crashed" on the dashboard even though it finished.
+    # So finish wandb explicitly first, then hard-exit past the Isaac teardown.
     try:
         main()
     finally:
+        try:
+            import wandb
+            if wandb.run is not None:
+                wandb.finish()
+        except Exception:
+            pass
         os._exit(0)
