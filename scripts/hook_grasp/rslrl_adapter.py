@@ -148,13 +148,18 @@ def make_runner_cfg(
     logger: str = "tensorboard",
     wandb_project: str = "hook-grasp-rnn",
     save_interval: int = 100,
+    policy_overrides: dict | None = None,
+    algo_overrides: dict | None = None,
 ) -> dict:
     """rsl_rl OnPolicyRunner train_cfg: ActorCriticRecurrent (LSTM) + PPO with adaptive-KL LR.
 
     Built as a plain dict (rather than the Isaac-Lab configclasses) so the recurrent RNN kwargs pass
     straight through to ``ActorCriticRecurrent.__init__`` without dataclass-field friction.
+
+    ``policy_overrides`` / ``algo_overrides`` merge into the policy / algorithm sub-dicts (the overnight
+    search tunes architecture + PPO HP here). ``class_name`` cannot be overridden (guarded).
     """
-    return {
+    cfg = {
         "seed": seed,
         "device": device,
         "num_steps_per_env": num_steps_per_env,
@@ -191,6 +196,15 @@ def make_runner_cfg(
             "max_grad_norm": 1.0,
         },
     }
+    if policy_overrides:
+        assert "class_name" not in policy_overrides, "cannot override policy class_name (must stay ActorCriticRecurrent)"
+        cfg["policy"].update(policy_overrides)
+        print(f"[make_runner_cfg] policy overrides: {policy_overrides}")
+    if algo_overrides:
+        assert "class_name" not in algo_overrides, "cannot override algorithm class_name (must stay PPO)"
+        cfg["algorithm"].update(algo_overrides)
+        print(f"[make_runner_cfg] algorithm overrides: {algo_overrides}")
+    return cfg
 
 
 def apply_f3_env_cfg(env_cfg) -> None:

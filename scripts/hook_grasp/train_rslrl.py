@@ -44,6 +44,14 @@ parser.add_argument("--actor_history_len", type=int, default=0,
 parser.add_argument("--reward_norm", action="store_true", default=False,
                     help="Pathak reward normalization: divide reward by running discounted-return std so the "
                          "value function sees a stationary return scale across curriculum level shifts.")
+parser.add_argument("--env_kv", type=str, default="",
+                    help="Comma-sep env_cfg overrides applied AFTER the F3 recipe, e.g. "
+                         "'reward_pump=true,pump_lift_weight=3.0,attachment.upsweep_v_min=0.06'. Rewards / "
+                         "curriculum / gates only -- NEVER obs_dim/history/task-defining fields.")
+parser.add_argument("--policy_kv", type=str, default="",
+                    help="Comma-sep ActorCriticRecurrent overrides, e.g. 'rnn_hidden_dim=512,rnn_num_layers=2'.")
+parser.add_argument("--algo_kv", type=str, default="",
+                    help="Comma-sep PPO overrides, e.g. 'entropy_coef=0.01,learning_rate=0.0005,desired_kl=0.02'.")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, _ = parser.parse_known_args()
 sys.argv = [sys.argv[0]]
@@ -76,6 +84,60 @@ from rslrl_adapter import (  # noqa: E402
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 
+# fields that MUST NOT be touched by --env_kv (they change the obs space or the task itself). The overnight
+# search tunes rewards / curriculum / gates / HP / architecture only; these are hard-blocked so a stray key
+# can never silently alter the locked observation space or the fundamental task.
+_ENV_KV_BLOCKLIST = {
+    "history_len", "actor_history_len", "actor_indi_residual", "obs_dim_per_frame", "observation_spaces",
+    "state_space", "action_dim", "action_spaces", "num_drones", "possible_agents", "partial_obs",
+}
+
+
+def _coerce(v: str):
+    """Infer bool/int/float/str from a string override value."""
+    lo = v.strip().lower()
+    if lo in ("true", "false"):
+        return lo == "true"
+    if lo in ("none", "null"):
+        return None
+    try:
+        return int(v)
+    except ValueError:
+        pass
+    try:
+        return float(v)
+    except ValueError:
+        return v
+
+
+def _parse_kv(s: str) -> dict:
+    """Parse 'a=1,b=2.0,c.d=true' -> {'a':1,'b':2.0,'c.d':True} with type inference."""
+    out = {}
+    for tok in s.split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        k, _, v = tok.partition("=")
+        out[k.strip()] = _coerce(v)
+    return out
+
+
+def _apply_env_kv(env_cfg, kv: dict):
+    """Set env_cfg fields (supports one level of nesting: 'attachment.upsweep_v_min'). Blocklisted keys raise."""
+    for k, v in kv.items():
+        root = k.split(".", 1)[0]
+        if root in _ENV_KV_BLOCKLIST:
+            raise ValueError(f"--env_kv key '{k}' is BLOCKED (changes obs space / task); refusing.")
+        if "." in k:
+            obj_name, attr = k.split(".", 1)
+            obj = getattr(env_cfg, obj_name)
+            assert hasattr(obj, attr), f"env_cfg.{obj_name} has no attribute '{attr}'"
+            setattr(obj, attr, v)
+        else:
+            assert hasattr(env_cfg, k), f"env_cfg has no attribute '{k}'"
+            setattr(env_cfg, k, v)
+        print(f"[train-rslrl] env override: {k} = {v}")
+
 
 def main():
     device = args_cli.device if args_cli.device is not None else "cuda:0"
@@ -87,6 +149,8 @@ def main():
         apply_indi_residual_cfg(env_cfg, actor_history_len=H, residual=args_cli.indi_residual)
         print(f"[train-rslrl] INDI-residual actor obs: residual={args_cli.indi_residual}  H={H}  "
               f"actor_obs_dim={next(iter(env_cfg.observation_spaces.values()))}")
+    if args_cli.env_kv:
+        _apply_env_kv(env_cfg, _parse_kv(args_cli.env_kv))
 
     env = gym.make(args_cli.task, cfg=env_cfg)
     base = env.unwrapped
@@ -104,6 +168,8 @@ def main():
         device=device,
         logger="wandb" if args_cli.wandb else "tensorboard",
         wandb_project=args_cli.wandb_project,
+        policy_overrides=_parse_kv(args_cli.policy_kv) if args_cli.policy_kv else None,
+        algo_overrides=_parse_kv(args_cli.algo_kv) if args_cli.algo_kv else None,
     )
 
     log_root = os.path.abspath(os.path.join("logs", "rsl_rl", args_cli.experiment_name))
