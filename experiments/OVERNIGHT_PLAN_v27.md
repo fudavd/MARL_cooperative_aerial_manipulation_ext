@@ -57,3 +57,10 @@ levers most likely to convert it into catch:
 - baseLong10k (resume v27L3 6k→10k): catch **0.139→0.175→0.244→0.373** @ 7k/8k/9k/10k, hold 0.89→0.97, jerk→107.
 - **catch 0.373 ≥ 0.30 AND hold 0.97 ≥ 0.80 → GOAL. Winning recipe = residual H3 + fixed 50 g tip + F3 + LONG training.**
 - Catch still climbing at 10k → resumed to 14k (v28_baseLong14k). Next: eval 11k/12k/13k/14k; if still climbing, extend further; then optionally test if entropy/RNN-512 push the peak even higher.
+
+## Reproducibility + push (2026-07-17 ~03:00)
+- seed42 @10k robust: catch 0.323 (CLEARS). seed7 @10k robust: **catch 0.219 (does NOT clear), hold 0.982.**
+  → **Goal is SEED-SENSITIVE at catch (0.22-0.32); HOLD robustly solved (0.97-0.98) across seeds.**
+- 1 ES run finished → headroom for 2 arms (17.5 GB < cliff). Running:
+  - v29_seed123_10k (base recipe) — characterize catch distribution.
+  - v29c_seed42_lowkl (desired_kl=0.005 stability lever, 12k) — try to lift/stabilize the peak vs seed42 base 0.323.
