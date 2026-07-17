@@ -25,8 +25,10 @@ robust n=1078 episodes / 348 caught → `GOALS_MET=True`).
    NO position). Actor obs = **153** (45 base + 6 residual, ×H=3); critic stays privileged 180.
 2. **Fixed 50 g hook tip** (mass DR off, wire 0.55 m fixed) → *makes CATCH learnable* (0.12 → 0.21): a consistent
    pendulum bob = consistent swing period/momentum → the actor+residual can time the up-sweep.
-3. **Long training (~10k iters)** → catch was undertrained at 6k (0.21); it climbs to **0.32 at 10k**. The base
-   **PEAKS at ~10k then collapses** (11k–13k fell to ~0.20) → capture the 10k checkpoint, do NOT overtrain.
+3. **Long training ~10k rsl_rl ITERATIONS = ~61.4M env-timesteps** (each iter = num_envs 256 × num_steps_per_env
+   24 = 6,144 env-steps; so "10k iters" is NOT short — it's ~61M steps, cross-checked vs v26L1's logged "6000
+   iters = 36.8M steps"). Catch was undertrained at 6k iters/37M (0.21); it climbs to **0.32 at 10k iters/61M**.
+   The base **PEAKS at ~10k then collapses** (11k–13k iters fell to ~0.20) → capture the 10k checkpoint, do NOT overtrain.
 
 **Backend:** rsl_rl `ActorCriticRecurrent` (LSTM h256, actor [256,256], asymmetric 153-actor / 180-critic PPO,
 adaptive-KL). F3 env recipe (`apply_f3_env_cfg`). NOT skrl.
