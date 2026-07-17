@@ -81,13 +81,18 @@ class EventCfg:
         },
     )
 
-    # Domain randomization of the hook+weight tip mass (nominal ~0.03 kg). startup -> fixed per env.
+    # Hook+weight tip mass PINNED at 50 g -- deliberately NOT randomized (degenerate range = every env
+    # identical). The hook is the pendulum bob, so its mass sets the swing period and the momentum delivered at
+    # the bar; the old (0.02, 0.05) DR handed every env a different bob and, because an EA evaluates genome g
+    # only on envs [g*n_repeats, (g+1)*n_repeats), each genome was permanently stuck with its own mass block --
+    # a nuisance variable no number of repeats averages out. The wire length is likewise fixed (0.55 m, baked
+    # into the flyhook USD; see attachment.wire_length), so the pendulum is now a fixed physical system.
     randomize_hook_mass = EventTerm(
         func=mdp.randomize_rigid_body_mass,
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=[FLYHOOK_HOOK_BODY]),
-            "mass_distribution_params": (0.02, 0.05),
+            "mass_distribution_params": (0.05, 0.05),   # kg: fixed 50 g (lo == hi -> no randomization)
             "operation": "abs",
         },
     )
@@ -224,6 +229,19 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
     # (self._spawn_generation) and control-step-driven for PPO. EVAL-SAFE: spawn_curriculum=False -> full spread
     # (frac=1); eval scripts disable it.
     spawn_curriculum: bool = True
+    # --- COMMON RANDOM NUMBERS (CRN) -- variance reduction for the EA/ES path only -------------------
+    # An EA ranks genomes by a single scalar and has NO critic/baseline, so any per-episode randomness lands
+    # straight in the ranking. The attached-spawn curriculum is the worst offender: it flips an independent coin
+    # per episode (frac0=0.5), and an attached episode banks the success bonus almost for free -> a genome's
+    # fitness largely reflects how many free spawns it drew, not how good it is. (MAPPO is immune: its critic
+    # sees `attached` in the privileged state and the advantage baselines the windfall away.)
+    # With crn=True every genome in a generation faces an IDENTICAL set of episode conditions: env e draws its
+    # randomness from scenario (e % n_repeats) -- the trainer sets _crn_repeats -- so the luck becomes a shared
+    # constant that CANCELS in the rank transform, leaving pure policy differences. The table is redrawn each
+    # generation (common WITHIN, independent ACROSS), so the curriculum and the task distribution are untouched.
+    # Requires num_envs == popsize * n_repeats with genome = env//n_repeats (the Hebbian trainer's layout).
+    crn: bool = False
+    crn_seed: int = 0                  # per-generation table seed: crn_seed*1000003 + generation
     spawn_dist_mu: float = 0.6         # m: FIXED mean radial distance from the wall (the catchable zone; mode
                                        # stays here forever so easy spawns are always present)
     # STRIPPED DIAGNOSTIC: std pinned tiny (fixed ~0.6 m point-blank), azimuth pinned tiny (always in-front).
@@ -320,6 +338,31 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
     # instead of the binary impact-box gate, so the swing is rewarded most when it peaks ON the bar. Opt-in.
     reward_aimed_upsweep: bool = False
     upsweep_aim_k: float = 3.0    # exp(-k*hook_bar_dist): ~0.55@0.2m, ~0.26@0.45m -> concentrates the up-reward at the bar
+
+    # --- PERPENDICULAR-SWING shaping (2026-07-17): force a genuine pendulum swinging PERPENDICULAR to the target
+    # wall, instead of the two failure modes seen in the videos: (a) the hook hanging DEAD straight below the drone,
+    # (b) the hook skimming SIDEWAYS along the wall face. Decomposes the hook velocity in the assigned wall's
+    # orthonormal frame (wall_normal / bar_axis / wall_up) and shapes each component separately:
+    #   * PERPENDICULAR |v.wall_normal| -> REWARDED in BOTH directions (in AND out). Swinging back and forth
+    #     through the wall normal is exactly how pendulum amplitude is pumped; rewarding only the inbound stroke
+    #     would invite a one-way charge (and impact_perp already punishes slamming). Capped by swing_perp_cap so
+    #     it cannot be farmed by simply flying fast.
+    #   * LATERAL |v.bar_axis| -> PENALIZED (the sideways skim along the wall face; it earns v_up just as well but
+    #     never seats the hook on the bar).
+    #   * VERTICAL v_up is deliberately NOT penalized even though it lies IN the wall plane: the catch REQUIRES
+    #     v_up > attachment.upsweep_v_min to seat on a horizontal bar, and a true perpendicular pendulum arc is
+    #     precisely perpendicular+vertical with ZERO lateral. Penalizing v_up would fight the catch gate.
+    #   * STANDSTILL BELOW THE DRONE -> PENALIZED: peaks when the hook hangs ~straight under the drone AND is
+    #     barely moving RELATIVE TO THE DRONE (the dead pendulum). Relative velocity is used on purpose so that
+    #     carrying a dead-hanging hook around at speed still counts as a standstill (the pendulum is not swinging).
+    # All terms are UNATTACHED-phase only (once locked we want a taut hold, not a swing). Opt-in: weights default
+    # 0.0, so every existing arm/recipe is unaffected.
+    swing_perp_weight: float = 0.0      # reward on clamp(|v_hook . wall_normal|, max=swing_perp_cap), unattached
+    swing_perp_cap: float = 1.5         # m/s: cap on the rewarded perpendicular speed (anti reward-farming)
+    swing_lateral_weight: float = 0.0   # penalty on |v_hook . bar_axis| (sideways skim along the wall face)
+    swing_still_weight: float = 0.0     # penalty on the dead hang (hook straight below the drone AND not swinging)
+    swing_still_radius: float = 0.15    # m: horizontal hook-under-drone offset scale; exp(-(horiz/r)^2) -> 1 = dead below
+    swing_still_speed: float = 0.3      # m/s: hook-vs-drone relative speed at/above which it is NOT a standstill
 
     # PENDULUM PUMP shaping (raises catch via a REPEATABLE pump-release-lift maneuver -> consistent swing timing,
     # vs scattershot up-sweeps). Two shaping terms on the drone's OWN (controllable) motion; the "stop/reverse to

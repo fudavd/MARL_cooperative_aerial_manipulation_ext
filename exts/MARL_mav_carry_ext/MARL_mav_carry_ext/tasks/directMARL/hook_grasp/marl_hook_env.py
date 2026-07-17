@@ -71,6 +71,12 @@ class MARLHookGraspEnv(DirectMARLEnv):
         # current ES generation (set by the Hebbian trainer each generation, before the reset). Drives the
         # spawn-std curriculum on a per-GENERATION basis instead of control steps. 0 until the trainer sets it.
         self._spawn_generation = 0
+        # common random numbers (see cfg.crn): the EA trainer sets _crn_repeats = n_repeats, and env e then takes
+        # every per-episode draw from scenario (e % n_repeats) instead of drawing fresh -- so all genomes in a
+        # generation face identical conditions. 0 -> inactive (PPO/eval draw fresh, unchanged).
+        self._crn_repeats = 0
+        self._crn_gen_cached = -1
+        self._crn_tab: dict = {}
         self._capture_end = float(cfg.attachment.capture_radius)
         self._capture_start = float(cfg.capture_radius_start)
         if cfg.capture_curriculum:
@@ -190,6 +196,7 @@ class MARLHookGraspEnv(DirectMARLEnv):
                 "approach", "proximity", "impact_perp", "impact_up",
                 "catch", "success", "alive", "death", "lock", "tension", "wall_pull", "progress", "detach",
                 "action_smoothness", "body_rate_penalty", "force_penalty", "downwash", "swing_limit", "pump",
+                "swing_shape",
             ]
         }
         self.metrics = {
@@ -620,6 +627,7 @@ class MARLHookGraspEnv(DirectMARLEnv):
         progress = torch.zeros(self.num_envs, device=self.device)
         swing_limit = torch.zeros(self.num_envs, device=self.device)
         pump = torch.zeros(self.num_envs, device=self.device)
+        swing_shape = torch.zeros(self.num_envs, device=self.device)
         for i in range(self._num_drones):
             drone_pos = self.drone_positions[:, i]
             hook_pos = self.hook_positions[:, i]
@@ -631,7 +639,7 @@ class MARLHookGraspEnv(DirectMARLEnv):
             # (drives BOTH the coarse approach progress and the fine proximity/impact shaping, so the whole
             # chain pulls the HOOK toward its one target wall -- not the basket centre, nor a different wall,
             # which would let the drone latch on the wrong side). --------------------------------------------
-            bar_pos, _, wall_normal = self._assigned_wall_point(hook_pos, i)
+            bar_pos, bar_axis, wall_normal = self._assigned_wall_point(hook_pos, i)
             hook_bar = torch.norm(hook_pos - bar_pos, dim=-1)                # dist to CLOSEST point (catch can be here)
 
             # Shaping TARGET for approach/proximity: the CENTRE of the assigned wall (the designated attach point)
@@ -693,6 +701,32 @@ class MARLHookGraspEnv(DirectMARLEnv):
                 impact_up += self.cfg.impact_up_weight * torch.clamp(v_up, min=0.0) * aim
             else:
                 impact_up += self.cfg.impact_up_weight * v_up * in_zone
+
+            # --- PERPENDICULAR-SWING shaping (see cfg.swing_*): make the pendulum swing INTO the wall, not hang
+            # dead below the drone nor skim sideways along the wall face. Wall-frame decomposition of hook_vel:
+            #   v_normal (perp, computed above) | v_lat = v . bar_axis (in-plane, ALONG the bar) | v_up (in-plane,
+            #   vertical -- deliberately untouched here: the catch REQUIRES v_up > upsweep_v_min, and a genuine
+            #   perpendicular arc is perpendicular+vertical with zero lateral).
+            # Unattached only (once locked we want a taut hold, not a swing).
+            if self.cfg.swing_perp_weight > 0.0:
+                # REWARD |v.n| BOTH ways: swinging back and forth through the wall normal is what pumps pendulum
+                # amplitude. Capped so it cannot be farmed by flying fast.
+                v_perp_abs = torch.clamp(v_normal.abs(), max=self.cfg.swing_perp_cap)
+                swing_shape += self.cfg.swing_perp_weight * v_perp_abs * not_att
+            if self.cfg.swing_lateral_weight > 0.0:
+                # PENALIZE the sideways skim along the wall face (|v . bar_axis|).
+                v_lat = (hook_vel * bar_axis).sum(-1)
+                swing_shape += -self.cfg.swing_lateral_weight * v_lat.abs() * not_att
+            if self.cfg.swing_still_weight > 0.0:
+                # PENALIZE the DEAD PENDULUM: hook hanging ~straight under the drone AND barely moving relative to
+                # it. Relative (not world) velocity on purpose -> carrying a dead hook around at speed still counts
+                # as a standstill. below -> 1 when the hook is directly under the drone, decays as it swings out.
+                rel = hook_pos - drone_pos
+                horiz = torch.norm(rel[:, :2], dim=-1)
+                below = torch.exp(-(horiz / self.cfg.swing_still_radius).square())
+                v_rel = torch.norm(hook_vel - self.drone_linear_velocities[:, i], dim=-1)
+                slow = torch.clamp(1.0 - v_rel / self.cfg.swing_still_speed, min=0.0)
+                swing_shape += -self.cfg.swing_still_weight * below * slow * not_att
 
             # --- locking: reward staying locked (attached) --------------------------------
             lock += self.cfg.lock_weight * attached.float()
@@ -765,6 +799,7 @@ class MARLHookGraspEnv(DirectMARLEnv):
         r_progress = self.cfg.progress_weight * progress * dt   # "percentage toward success" per step (resets on loss)
         r_swing_limit = -swing_limit * dt
         r_pump = pump * dt                                      # pendulum pump-release-lift shaping (see loop)
+        r_swing_shape = swing_shape * dt                        # perpendicular-swing shaping: +|v.n|, -|v.bar_axis|, -deadhang
 
         # CONSISTENT event bonuses (applied EVERY attach / detach, NOT one-off): +catch_bonus on each attach,
         # -detach_penalty on each detach. The two are BALANCED (equal magnitude, cfg), so a spurious
@@ -812,6 +847,7 @@ class MARLHookGraspEnv(DirectMARLEnv):
             "lock": r_lock, "tension": r_tension, "wall_pull": r_wall_pull, "progress": r_progress,
             "action_smoothness": r_smooth, "body_rate_penalty": r_body_rate, "force_penalty": r_effort,
             "downwash": r_downwash, "swing_limit": r_swing_limit, "pump": r_pump,
+            "swing_shape": r_swing_shape,
         }
         for k, v in reward_terms.items():
             self._episode_sums[k] += v
@@ -964,10 +1000,21 @@ class MARLHookGraspEnv(DirectMARLEnv):
         n = len(env_ids)
         r = torch.empty(n, device=self.device)
         rng = self.cfg.basket_pose_range
-        self.basket_pos_w[env_ids, 0] = r.uniform_(*rng["pos_x"]).clone()
-        self.basket_pos_w[env_ids, 1] = torch.empty(n, device=self.device).uniform_(*rng["pos_y"])
-        self.basket_pos_w[env_ids, 2] = torch.empty(n, device=self.device).uniform_(*rng["pos_z"])
-        yaw = torch.empty(n, device=self.device).uniform_(*rng["yaw"])
+
+        def _uni(lohi, col):
+            """U(lo, hi): the shared CRN draw when active, else a fresh one (identical distribution)."""
+            lo, hi = lohi
+            if self._crn_on:
+                return lo + (hi - lo) * self._crn("basket", env_ids)[:, col]
+            return torch.empty(n, device=self.device).uniform_(lo, hi)
+
+        if self._crn_on:
+            self.basket_pos_w[env_ids, 0] = _uni(rng["pos_x"], 0)
+        else:
+            self.basket_pos_w[env_ids, 0] = r.uniform_(*rng["pos_x"]).clone()
+        self.basket_pos_w[env_ids, 1] = _uni(rng["pos_y"], 1)
+        self.basket_pos_w[env_ids, 2] = _uni(rng["pos_z"], 2)
+        yaw = _uni(rng["yaw"], 3)
         zeros = torch.zeros(n, device=self.device)
         self.basket_quat_w[env_ids] = quat_from_euler_xyz(zeros, zeros, yaw)
 
@@ -979,6 +1026,8 @@ class MARLHookGraspEnv(DirectMARLEnv):
             # STRIPPED diagnostic: always the same wall (removes the 4x task-multiplex so we can test whether a
             # SINGLE fixed catch is learnable at all).
             self._assigned_wall[env_ids] = self.cfg.fixed_wall
+        elif self._crn_on:
+            self._assigned_wall[env_ids] = (self._crn("wall", env_ids) * 4).long().clamp_(0, 3)
         else:
             self._assigned_wall[env_ids] = torch.randint(
                 0, 4, (n, self._num_drones), device=self.device, dtype=torch.long
@@ -988,15 +1037,62 @@ class MARLHookGraspEnv(DirectMARLEnv):
         # basket's start pose + a small offset (construction demo -> short transport, so the goal stays near
         # the initial drone/basket region). z clamped >= a floor so the goal never goes underground.
         go = self.cfg.goal_offset_range
-        dx = torch.empty(n, device=self.device).uniform_(*go["x"])
-        dy = torch.empty(n, device=self.device).uniform_(*go["y"])
-        dz = torch.empty(n, device=self.device).uniform_(*go["z"])
-        dyaw = torch.empty(n, device=self.device).uniform_(*go["yaw"])
+
+        def _goal(lohi, col):
+            lo, hi = lohi
+            if self._crn_on:
+                return lo + (hi - lo) * self._crn("goal", env_ids)[:, col]
+            return torch.empty(n, device=self.device).uniform_(lo, hi)
+
+        dx = _goal(go["x"], 0)
+        dy = _goal(go["y"], 1)
+        dz = _goal(go["z"], 2)
+        dyaw = _goal(go["yaw"], 3)
         self.pose_command_w[env_ids, 0] = self.basket_pos_w[env_ids, 0] + dx
         self.pose_command_w[env_ids, 1] = self.basket_pos_w[env_ids, 1] + dy
         self.pose_command_w[env_ids, 2] = (self.basket_pos_w[env_ids, 2] + dz).clamp_min(self.cfg.goal_z_floor)
         goal_yaw = yaw + dyaw
         self.pose_command_w[env_ids, 3:7] = quat_from_euler_xyz(zeros, zeros, goal_yaw)
+
+    @property
+    def _crn_on(self) -> bool:
+        """CRN is active only when requested AND the trainer declared its n_repeats (EA path)."""
+        return bool(getattr(self.cfg, "crn", False)) and self._crn_repeats > 0
+
+    def _crn_refresh(self):
+        """(Re)draw the per-generation CRN scenario table (see cfg.crn).
+
+        Stores only STANDARDIZED draws (u ~ U[0,1), z ~ N(0,1)); the curriculum-dependent transform is applied at
+        each use site. That is what lets CRN remove the luck WITHOUT freezing the curriculum: the shared u/z stay
+        fixed across genomes while the mapping (radius, std, attached fraction, ...) still anneals normally.
+        Redrawn every generation, so the population still sees the whole task distribution over training -- the
+        conditions are common WITHIN a ranking, independent ACROSS rankings."""
+        R = self._crn_repeats
+        gen = torch.Generator(device=self.device)
+        gen.manual_seed(int(getattr(self.cfg, "crn_seed", 0)) * 1_000_003 + int(self._spawn_generation))
+
+        def u(*shape):
+            return torch.rand(R, *shape, generator=gen, device=self.device)
+
+        self._crn_tab = {
+            "basket": u(4),                                              # basket pose: x, y, z, yaw
+            "wall": u(self._num_drones),                                 # assigned-wall pick
+            "goal": u(4),                                                # transport-goal offset: x, y, z, yaw
+            "az": u(),                                                   # spawn azimuth jitter
+            "dist": torch.randn(R, generator=gen, device=self.device),   # spawn radial distance (standard normal)
+            "znoise": u(),                                               # spawn height noise
+            "yaw": u(),                                                  # spawn yaw
+            "att_sel": u(),                                              # attached-spawn coin flip  <-- the big one
+            "att_jit": u(3),                                             # attached-spawn pose jitter
+        }
+        self._crn_gen_cached = int(self._spawn_generation)
+
+    def _crn(self, key: str, ids: torch.Tensor) -> torch.Tensor:
+        """Standardized CRN draw for ``ids``; scenario = env_id % n_repeats. Refreshes the table on a new
+        generation (the trainer bumps _spawn_generation before the reset that starts it)."""
+        if self._crn_gen_cached != int(self._spawn_generation):
+            self._crn_refresh()
+        return self._crn_tab[key][ids % self._crn_repeats]
 
     def _spawn_frac(self) -> float:
         """Spawn-curriculum progress in [0, 1] (0 = tight/in-front, 1 = full range). Generation-driven for EA
@@ -1031,26 +1127,32 @@ class MARLHookGraspEnv(DirectMARLEnv):
         # never beyond spawn_azimuth_max (the STRIPPED diagnostic pins this small so the drone is always in-front).
         base_ang = torch.atan2(normal_w[:, 1], normal_w[:, 0])                 # (M,)
         az = min(frac * math.pi, self.cfg.spawn_azimuth_max)
-        jitter = (torch.rand(M, device=self.device) * 2 - 1) * az
+        _u_az = self._crn("az", env_ids) if self._crn_on else torch.rand(M, device=self.device)
+        jitter = (_u_az * 2 - 1) * az
         ang = base_ang + jitter
         # radial distance = Gaussian about a FIXED mean (the catchable 0.6 m) with std that GROWS with the
         # curriculum: the mode stays at the easy point-blank distance forever (always a fraction of easy spawns
         # -> no catastrophic forgetting), while the widening tail slowly reaches out to harder far/near spawns.
         # Clamped to [min, max] so nothing lands inside the basket footprint or absurdly far.
         std = self.cfg.spawn_std_start + (self.cfg.spawn_std_end - self.cfg.spawn_std_start) * frac
-        r = self.cfg.spawn_dist_mu + torch.randn(M, device=self.device) * std
+        # CRN stores the STANDARD normal; the curriculum's std multiplies it here, so the spawn still widens
+        # exactly as before while the underlying draw stays common across genomes.
+        _z = self._crn("dist", env_ids) if self._crn_on else torch.randn(M, device=self.device)
+        r = self.cfg.spawn_dist_mu + _z * std
         r = r.clamp(self.cfg.spawn_dist_min, self.cfg.spawn_dist_max)
         basket_c = self.basket_pos_w[env_ids]                                  # (M, 3) env-local
         # jitter ONLY the height (z). The horizontal position is set purely by the clamped radius r, so with
         # r >= spawn_dist_min (0.5 m > basket half-diagonal 0.39 m) the spawn is GUARANTEED outside the box
         # footprint in every azimuth direction -- adding x/y noise here could pull it back inside the box.
-        z_noise = (torch.rand(M, device=self.device) * 2 - 1) * self.cfg.spawn_pos_noise
+        _u_zn = self._crn("znoise", env_ids) if self._crn_on else torch.rand(M, device=self.device)
+        z_noise = (_u_zn * 2 - 1) * self.cfg.spawn_pos_noise
         spawn_local = torch.empty(M, 3, device=self.device)
         spawn_local[:, 0] = basket_c[:, 0] + torch.cos(ang) * r
         spawn_local[:, 1] = basket_c[:, 1] + torch.sin(ang) * r
         spawn_local[:, 2] = basket_c[:, 2] + self.cfg.spawn_height + z_noise
         spawn_local[:, 2] = spawn_local[:, 2].clamp_min(self.cfg.min_drone_height + 0.2)
-        yaw = (torch.rand(M, device=self.device) * 2 - 1) * math.pi
+        _u_yaw = self._crn("yaw", env_ids) if self._crn_on else torch.rand(M, device=self.device)
+        yaw = (_u_yaw * 2 - 1) * math.pi
         zeros = torch.zeros(M, device=self.device)
         quat = quat_from_euler_xyz(zeros, zeros, yaw)                          # (M, 4)
         world_pos = spawn_local + self.scene.env_origins[env_ids]             # absolute (incl env origin)
@@ -1092,7 +1194,10 @@ class MARLHookGraspEnv(DirectMARLEnv):
         frac = self.cfg.attached_spawn_frac0 * (1.0 - prog)
         if frac <= 0.0:
             return
-        sel = torch.rand(M, device=self.device) < frac
+        # THE dominant EA fitness-noise source (see cfg.crn): under CRN the coin flip is shared, so for a given
+        # repeat r EVERY genome spawns attached-or-not identically -> the windfall cancels in the ranking.
+        _u_sel = self._crn("att_sel", env_ids) if self._crn_on else torch.rand(M, device=self.device)
+        sel = _u_sel < frac
         if not bool(sel.any()):
             return
         sub = env_ids[sel]                                                     # (n,) envs to spawn attached
@@ -1116,7 +1221,9 @@ class MARLHookGraspEnv(DirectMARLEnv):
         drone_w = bar_w + wl * steady_dir                                     # (n, 3)
         jit = self.cfg.attached_spawn_jitter * prog                          # basin widens with the curriculum
         if jit > 0.0:
-            drone_w = drone_w + (torch.rand(n, 3, device=self.device) * 2 - 1) * jit
+            # indexed by `sub` (the envs actually spawning attached), not env_ids
+            _u_jit = self._crn("att_jit", sub) if self._crn_on else torch.rand(n, 3, device=self.device)
+            drone_w = drone_w + (_u_jit * 2 - 1) * jit
         drone_w[:, 2] = drone_w[:, 2].clamp_min(self.cfg.min_drone_height + 0.2)
         yaw = torch.atan2(-n_out[:, 1], -n_out[:, 0])                        # face the wall
         zeros = torch.zeros(n, device=self.device)
