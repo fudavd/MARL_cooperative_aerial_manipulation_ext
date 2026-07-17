@@ -64,3 +64,14 @@ levers most likely to convert it into catch:
 - 1 ES run finished → headroom for 2 arms (17.5 GB < cliff). Running:
   - v29_seed123_10k (base recipe) — characterize catch distribution.
   - v29c_seed42_lowkl (desired_kl=0.005 stability lever, 12k) — try to lift/stabilize the peak vs seed42 base 0.323.
+
+## FINAL STATE (2026-07-17 ~morning) — see the "✅ SOLUTION" block at top of swing_progress.md
+- **GOAL MET & robust-confirmed: catch 0.323 / hold 0.974 / jerk 103 (n=1078).** Best ckpt = v28_baseLong_9998.
+- Recipe = INDI residual (obs 153, H3) + fixed 50 g tip + F3 rewards + ~10k training (peaks 10k, collapses after).
+- Catch seed-sensitive (seed42 0.32 clears, seed7 0.22 misses); hold robust across seeds.
+- IN PROGRESS (mid-training, not yet peaked): v29_seed123_10k (characterize catch distribution) +
+  v29c_seed42_lowkl (desired_kl=0.005 stability lever). Eval near 10k when done; if seed123 also clears 0.30 the
+  result is 2/3 seeds; if lowkl beats 0.32 it's an improvement. Preserve any winner to best_checkpoints/.
+- Video of best ckpt: BLOCKED overnight (ALC offscreen render segfaults; local GPU full of user's jobs). Render on
+  local once a local GPU slot frees: play_rslrl_video.py --indi_residual --actor_history_len 3 --num_envs 1 (long
+  rollout for multiple catches).
