@@ -52,8 +52,9 @@ Measured by `scripts/hook_grasp/eval_behavior.py` (deterministic, radius 0.13, c
 - `--resume <ckpt>` continues the iter counter (extend-training). Base PEAKS ~10k iters then collapses.
 - Levers already tried that did NOT help catch: reward_norm (hurt), aimed_upsweep (neutral), desired_kl=0.005
   (hurt), swing-perp reward @ (1.5/2/2) (catch 0.32→0.24 but check physicality). Untested: RNN 512, more seeds.
-- **Email policy:** send ONE email on a genuine blocker (ALC unreachable, every arm crashing, disk full, or a
-  confirmed champion improvement worth flagging). Do NOT email routine progress.
+- **Email policy:** on a genuine blocker (ALC unreachable, every arm crashing, disk full) OR a scrutiny-CONFIRMED
+  champion improvement, create a Gmail DRAFT to fuda.vandiggelen@epfl.ch (mcp__claude_ai_Gmail__create_draft — the
+  tool can only DRAFT, not send; user sees it in Drafts). One draft per event; do NOT draft routine progress.
 
 ## WAVE LOG (append newest at top)
 - (pending) Wave 0: behavior baseline of champion + v30; first DESIGN workflow.
