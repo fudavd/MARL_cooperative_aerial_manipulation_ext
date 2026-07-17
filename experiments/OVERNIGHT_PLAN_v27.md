@@ -75,3 +75,11 @@ levers most likely to convert it into catch:
 - Video of best ckpt: BLOCKED overnight (ALC offscreen render segfaults; local GPU full of user's jobs). Render on
   local once a local GPU slot frees: play_rslrl_video.py --indi_residual --actor_history_len 3 --num_envs 1 (long
   rollout for multiple catches).
+
+## FINAL reproducibility + lever results (2026-07-17 ~14:00) — HONEST verdict
+- catch @10k by seed: seed42 **0.323** (clears), seed7 **0.219**, seed123 **0.131** → **1/3 base seeds clears 0.30.**
+- desired_kl=0.005 lever (seed42, 12k): catch 0.148 (HURT — too conservative), hold 1.0, jerk 81 (smoothest).
+- reward_norm: hurt catch (0.21→0.12). aimed_upsweep: neutral. → no lever raised catch; F3 rewards already tuned.
+- VERDICT: HOLD robustly solved (0.97–1.00 all seeds); CATCH met on best seed only (seed-variable 0.13–0.32).
+  Deliverable = seed42 v28_baseLong_9998 (0.323/0.974). Reliable-every-seed catch≥0.30 NOT achieved; next best
+  bet = more seeds keep-best, and untested RNN-512 capacity.

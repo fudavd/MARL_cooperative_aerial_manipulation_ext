@@ -9,11 +9,24 @@
 
 ---
 
-# ✅ SOLUTION — CURRENT BEST (2026-07-17)
+# SOLUTION — CURRENT BEST (2026-07-17)
 
-**BOTH GOAL GATES MET** on a hook-blind, real-drone-honest actor:
-**catch 0.323 · hold|caught 0.974 · jerk 103 N** (deterministic true-task eval, radius 0.13, fixed 50 g tip,
-robust n=1078 episodes / 348 caught → `GOALS_MET=True`).
+**HOLD gate robustly solved; CATCH gate met on the BEST of 3 seeds (seed-sensitive — see reproducibility below).**
+Best checkpoint (seed 42) on the deterministic true-task eval (radius 0.13, fixed 50 g tip, robust n=1078 eps):
+**catch 0.323 · hold|caught 0.974 · jerk 103 N → both gates cleared.** This is a genuine goal-meeting policy, but
+it is the favorable tail of the seed distribution, NOT a reliable every-seed result.
+
+**REPRODUCIBILITY (catch @~10k iters/61M steps, deterministic true-task):**
+| seed / config | catch | hold | clears catch≥0.30 |
+|---|---|---|---|
+| **seed 42 (base)** | **0.323** (n=1078) | 0.974 | ✅ |
+| seed 7 (base) | 0.219 (n=1034) | 0.982 | ❌ |
+| seed 123 (base) | 0.131 (n=52) | 0.981 | ❌ |
+| seed 42 + desired_kl=0.005 (12k) | 0.148 | 1.000 | ❌ (lever hurt catch) |
+
+⇒ **catch ranges 0.13–0.32 by seed; only 1/3 base seeds clears 0.30.** The residual+fixed-tip+long-training lifts
+catch well above the old hook-blind ~0.11 ceiling into 0.13–0.32, and seed 42 clears the gate — but reliably
+clearing 0.30 every seed is NOT achieved. **HOLD is robustly solved: 0.97–1.00 across ALL seeds/configs.**
 
 **Best checkpoint:** `experiments/best_checkpoints/v28_baseLong_9998_catch0.37_hold0.97_jerk107_GOALSMET_residH3_fixtip_rslRL.pt`
 (filename says 0.37 = first small-n=100 read; the honest large-sample value is **catch 0.323**. Trained on ALC as
@@ -41,10 +54,12 @@ adaptive-KL). F3 env recipe (`apply_f3_env_cfg`). NOT skrl.
 reward-shaping additions generally (F3 rewards already well-tuned). The gate was cleared by obs-signal + task-consistency
 + training length, not by reward/HP tuning.
 
-**Known caveat — catch is SEED-SENSITIVE (hold is not):** seed 42 → catch 0.323 (clears); seed 7 → catch 0.219
-(clears hold 0.982, misses the 0.30 catch gate). Catch lands ~0.22–0.32 by seed, right at the gate edge; **hold is
-robustly solved (0.97–0.98) across seeds.** In progress at last update: seed 123 (characterize the catch
-distribution) + seed 42 `desired_kl=0.005` (stability lever, aims to lift/hold the peak) — both mid-training on ALC.
+**Known caveat — catch is SEED-SENSITIVE (see the reproducibility table above):** 3 base seeds → catch
+{0.323, 0.219, 0.131}, only seed 42 clears 0.30. Stability lever `desired_kl=0.005` HURT catch (0.15, too
+conservative → slow catch development) though it gave the smoothest/best hold (jerk 81, hold 1.0). **Hold robustly
+solved across all seeds/configs (0.97–1.00).** Open direction to make catch reliably ≥0.30 every seed (not yet
+found): more seeds+keep-best is the pragmatic path; capacity (RNN 512) untested; the catch bottleneck is up-sweep
+aim/timing precision, which the residual only partially addresses (it carries force/phase, not hook position).
 
 **Operational notes:** ALC (marvin) GPU pages catastrophically >~18 GB (2 rsl_rl arms max when sharing with the ES
 runs; 1 arm when ES heavy). ALC headless offscreen RENDER segfaults (Isaac hydra init) — videos must render on a
@@ -57,6 +72,7 @@ via `--env_kv/--policy_kv/--algo_kv` (obs/task fields hard-blocked).
 Rulebook = `experiments/AGENT_CONSTITUTION.md` (binding: never change task / 135-dim actor obs / 180-dim critic state / catch-detach physics / success thresholds; only rewards·curricula·HP·spawn-fields). wandb project `hook-grasp-mappo`.
 
 - **2026-07-16 14:00 — INDI-RESIDUAL actor obs launched (option b): the FIRST deliberate relaxation of the hook-blind lock, targeting the trigger-timing gap.** User authorized adding the **INDI disturbance residual** to the LSTM actor — the onboard-IMU/INDI-measurable hook+wire wrench (FORCE/phase), which reveals hook DYNAMICS but **no hook or wall POSITION** (real-drone-honest; hook→wall distance stays forbidden). Implemented as a config-gated 6-dim body-frame term appended per actor frame: **[angular: `alpha_cmd − omega_dot`** (the literal INDI increment, indi.py line ~117) **| linear: `Rᵀ(acc_cmd − a_meas)`]** — I included the *linear* channel too (stronger hook channel: wire near CoM makes the angular signature weak). `IndiController.disturbance_residual` exposed; env caches per drone in `_apply_action`, appends in `_drone_obs_frame`. New `actor_history_len` **decouples the ACTOR frame-stack depth H from the critic** (critic keeps history_len=3 → stays 180-dim, clean ablation). `rslrl_adapter.apply_indi_residual_cfg` recomputes `observation_spaces`; train/eval/play take `--indi_residual --actor_history_len`; dim asserts now read the declared space. Smoke-tested locally (H1→51, H3→153, critic 180, no NaN; eval loads a residual ckpt end-to-end). **Two ALC arms live (seed 42, differ ONLY in H):** **v26L2_indiresid_H1** (actor_obs=51: single frame + LSTM memory) · **v26L3_indiresid_H3** (actor_obs=153: 3-frame stack + LSTM). wandb `hook-grasp-rnn`, 6000 iters. GPU 11.6/24.6 GB. **Test:** does the residual let the hook-blind actor TIME the up-sweep velocity gate (v_up>0.08) → catch ≫ 0.11 ceiling, while H ablates how much explicit history the residual needs. Commit `a051d8c`. Eval plan: at peak (~5000 iters, ~1h) run eval_rslrl `--indi_residual --actor_history_len {1,3}` vs the v26L1 baseline (catch 0.10/hold 0.46) and the ~0.11 ceiling.
+- **2026-07-17 ~14:00 — REPRODUCIBILITY VERDICT (honest correction): catch is SEED-SENSITIVE, only 1/3 seeds clears 0.30.** Completed 3-base-seed eval @10k: seed42 **0.323** (clears), seed7 **0.219**, seed123 **0.131** — catch spans 0.13–0.32, only seed42 clears the gate. So the earlier unqualified "GOALS MET" is walked back to: **goal met on the BEST seed (42); catch reaches 0.13–0.32 by seed (well above the old hook-blind ~0.11 ceiling) but doesn't reliably clear 0.30.** HOLD robustly solved 0.97–1.00 across ALL seeds. Stability lever **desired_kl=0.005 HURT catch** (seed42+lowkl @12k = 0.148, too conservative → slow catch dev) but gave smoothest/best hold (jerk 81, hold 1.0). Levers that did NOT help catch: reward_norm (0.21→0.12), aimed_upsweep (neutral), desired_kl=0.005 (0.32→0.15). The catch bottleneck (up-sweep aim/timing precision) is only partially addressable by the residual (force/phase, not position). Best deliverable = seed42 model_9998 (catch 0.323/hold 0.974). SOLUTION block at top updated with the reproducibility table.
 - **2026-07-17 01:20 — ✅ GOAL ROBUSTLY CONFIRMED (catch 0.323 / hold 0.974, n=1078 eps) + peak-at-10k established.** Big-sample re-eval of model_9998 (256 envs × 8000 steps, 1078 eps / 348 caught): **catch 0.323, hold 0.974, jerk 103, GOALS_MET=True.** (The 0.373 first read was a favorable small n=100 sample; 0.323 is the honest number — still clears 0.30.) 14k trajectory shows the base **PEAKS at ~10k then oscillates/collapses**: 0.373@10k → 0.210@11k → 0.178@12k → 0.224@13k ⇒ training beyond 10k does NOT help (the non-stationarity the user flagged, now visible in catch). **model_9998 (10k) is the deliverable.** Now testing REPRODUCIBILITY: launched v29_seed7_10k (winning recipe, seed 7) — the prior C-recipe was seed-sensitive, so confirming a 2nd seed clears the gate de-risks the claim.
 - **2026-07-17 00:40 — 🎯🎯 BOTH GOAL GATES MET. catch 0.373 / hold 0.97 @ 10k iters (deterministic true-task eval).** Resuming the base (v27L3 resid H3, fixed 50 g tip) from 6k → 10k, catch climbed monotonically: **0.139@7k → 0.175@8k → 0.244@9k → 0.373@10k** (hold 0.89→0.97, jerk 143→107, n=100 caught @10k). **catch 0.373 ≥ 0.30 AND hold 0.97 ≥ 0.80 → GOALS_MET=TRUE.** The (7k dip to 0.139 was eval noise, n=36.) ⇒ **The winning recipe = INDI residual (obs 153, H3) + fixed 50 g tip + F3 rewards, trained LONG (10k, was undertrained at 6k).** No reward/HP/arch change needed to clear the gate — the levers that mattered were (1) the residual [hold], (2) fixed tip [catch learnability], (3) enough training [catch still climbing at 6k]. Catch STILL climbing steeply at 10k (0.24→0.37 in last 1k) → **resumed to 14k** to push higher. Checkpoint preserved: best_checkpoints/v28_baseLong_9998_catch0.37_hold0.97_jerk107_GOALSMET.
 - **2026-07-16 22:10 — ★ FIXED 50 g TIP boosts CATCH 0.12 → 0.21 (nuisance-mass removed → learnable up-sweep timing). Overnight search begins.** v27L3 (resid H3, trained end-to-end on the fixed 50 g tip, model_5999) fixed-tip eval: **catch 0.208, hold|caught 0.944 (51/54), jerk 134, mean-hold 1313.** vs the spread-mass-trained read (0.12/0.97). The user's fixed-tip request materially HELPS: a consistent pendulum bob (no per-env mass) makes the swing period/momentum consistent → the actor+residual time the up-sweep far better. **Base for the overnight search = v27L3, catch 0.21 / hold 0.94 — 70 % to the 0.30 catch gate, hold already solved.** Remaining lever: push catch to 0.30 via reward/HP/arch tuning (obs FROZEN). **RESOURCE NOTE: user launched 2 Hebbian ES runs on ALC (es_f3_crn, es_f3_crn_indi — adopting the INDI residual + CRN, 8192 envs each, ~10.8 GB, 12 h). To not degrade their ES, my search runs 1 rsl_rl arm at a time (256 envs, ~16.8 GB total, under the 18 GB UVM cliff).** See experiments/OVERNIGHT_PLAN_v27.md.
