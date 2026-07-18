@@ -49,6 +49,7 @@ parser.add_argument("--seed", type=int, default=12345)
 parser.add_argument("--indi_residual", action="store_true", default=False)
 parser.add_argument("--actor_history_len", type=int, default=0)
 parser.add_argument("--near_wall", type=float, default=0.35, help="hook->bar dist (m) under which approach-behavior is scored")
+parser.add_argument("--policy_kv", type=str, default="", help="ActorCriticRecurrent overrides — MUST match training arch (e.g. 'rnn_hidden_dim=512,rnn_num_layers=2') or the checkpoint won't load.")
 parser.add_argument("--out", type=str, default="")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, _ = parser.parse_known_args()
@@ -99,7 +100,22 @@ def main():
     base = env.unwrapped
     assert isinstance(base, DirectMARLEnv)
     adapter = RslRlMarlAdapter(base)
-    train_cfg = make_runner_cfg(experiment_name="behavior", max_iterations=1, device=device, logger="tensorboard")
+    # policy_kv MUST match the trained architecture or runner.load() fails on a size mismatch.
+    pol = {}
+    for tok in args_cli.policy_kv.split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        k, _, v = tok.partition("=")
+        try:
+            pol[k.strip()] = int(v)
+        except ValueError:
+            try:
+                pol[k.strip()] = float(v)
+            except ValueError:
+                pol[k.strip()] = v
+    train_cfg = make_runner_cfg(experiment_name="behavior", max_iterations=1, device=device, logger="tensorboard",
+                                policy_overrides=pol or None)
     runner = OnPolicyRunner(adapter, train_cfg, log_dir=None, device=device)
     runner.load(args_cli.checkpoint)
     runner.eval_mode()

@@ -35,6 +35,8 @@ parser.add_argument("--indi_residual", action="store_true", default=False,
                     help="Actor was trained with the INDI-residual obs (must match the checkpoint).")
 parser.add_argument("--actor_history_len", type=int, default=0,
                     help="ACTOR frame-stack depth H used in training (0 -> env history_len); must match checkpoint.")
+parser.add_argument("--policy_kv", type=str, default="",
+                    help="ActorCriticRecurrent overrides — MUST match training arch or the checkpoint won't load.")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, _ = parser.parse_known_args()
 sys.argv = [sys.argv[0]]
@@ -86,7 +88,21 @@ def main():
     adapter = RslRlMarlAdapter(base)
 
     # build the runner just to reconstruct + load the recurrent policy (architecture must match training)
-    train_cfg = make_runner_cfg(experiment_name="eval", max_iterations=1, device=device, logger="tensorboard")
+    pol = {}
+    for tok in args_cli.policy_kv.split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        k, _, v = tok.partition("=")
+        try:
+            pol[k.strip()] = int(v)
+        except ValueError:
+            try:
+                pol[k.strip()] = float(v)
+            except ValueError:
+                pol[k.strip()] = v
+    train_cfg = make_runner_cfg(experiment_name="eval", max_iterations=1, device=device, logger="tensorboard",
+                                policy_overrides=pol or None)
     runner = OnPolicyRunner(adapter, train_cfg, log_dir=None, device=device)
     print(f"[eval-rslrl] loading checkpoint: {args_cli.checkpoint}")
     runner.load(args_cli.checkpoint)
