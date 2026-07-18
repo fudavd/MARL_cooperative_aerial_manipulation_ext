@@ -57,6 +57,18 @@ Measured by `scripts/hook_grasp/eval_behavior.py` (deterministic, radius 0.13, c
   tool can only DRAFT, not send; user sees it in Drafts). One draft per event; do NOT draft routine progress.
 
 ## WAVE LOG (append newest at top)
+- **Wave 3 (2026-07-18 ~20:00) LAUNCHED — combine the two wave-2 winning directions.**
+  - **v33a_combo**: 512x2 rnn (catch capacity) + fly-in runway (physicality) + pump + swing_still + swing_lateral=3.
+  - **v33b_hardrunway**: push physicality harder — spawn_dist_mu=0.8, spawn_away_v0=2.5, swing_still=6, swing_lateral=4,
+    pump_lift=12. Goal: drive deadhang 0.26→<0.15 and perp_ratio 0.51→>0.55.
+  - Also FIXED a real eval bug: eval_behavior/eval_rslrl ignored --policy_kv → architecture arms silently loaded as
+    256x1 (size mismatch). Now pass policy_kv through (commit 5925c18). Re-eval any arch arm WITH its --policy_kv.
+- **Wave 2 VERDICT (2026-07-18 ~19:40): two wins on DIFFERENT axes; neither passes physical gate yet.**
+  - **v32a_bigrnn_pump (512x2 LSTM): catch 0.605 (!! record) hold 0.97, but physicality 0.39 (deadhang 0.43 — still
+    creeps). Capacity is a strong CATCH lever, not a physicality fix.** Preserved: v32a...CATCHrecord.
+  - **v32b_runway_pump (spawn_away_v0=1.6, no assist): catch 0.45, physicality 0.44, deadhang 0.42→0.26 — FIRST real
+    physicality move.** The fly-in runway geometrically suppresses the dead-hang. Preserved: v32b...PHYSleader.
+  - perp_ratio stuck ~0.51 across ALL arms (need 0.55) — no lever moved it yet → added swing_lateral penalty to wave 3.
 - **Wave 2 (2026-07-18 ~13:20) LAUNCHED.** Target = PHYSICALITY (wave 1 showed catch & physicality are decoupled).
   - **v32a_bigrnn_pump**: 512x2 LSTM (`--policy_kv rnn_hidden_dim=512,rnn_num_layers=2`) + strong pump — capacity
     hypothesis: does more recurrent memory convert the pump's catch drive into a real timed swing?
