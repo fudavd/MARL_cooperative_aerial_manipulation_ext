@@ -57,6 +57,20 @@ Measured by `scripts/hook_grasp/eval_behavior.py` (deterministic, radius 0.13, c
   tool can only DRAFT, not send; user sees it in Drafts). One draft per event; do NOT draft routine progress.
 
 ## WAVE LOG (append newest at top)
+- **Wave 2 (2026-07-18 ~13:20) LAUNCHED.** Target = PHYSICALITY (wave 1 showed catch & physicality are decoupled).
+  - **v32a_bigrnn_pump**: 512x2 LSTM (`--policy_kv rnn_hidden_dim=512,rnn_num_layers=2`) + strong pump — capacity
+    hypothesis: does more recurrent memory convert the pump's catch drive into a real timed swing?
+  - **v32b_runway_pump**: `spawn_away_v0=1.6, swing_assist_v0=0, spawn_dist_mu=0.6` + strong pump — geometric
+    hypothesis: force a fly-IN perpendicular load so creep isn't available.
+- **Wave 1 VERDICT (2026-07-18 ~13:10): catch and physicality are DECOUPLED levers.**
+  - **v31a_pump: catch 0.31→0.46 (!) hold 0.98 jerk 82 — BIG catch win, but physicality 0.34 (upsweep 0.19,
+    deadhang 0.46) — WORSE. Pump buys reliability by intensifying the CREEP, not fixing it.** Preserved as a
+    catch-only fallback: best_checkpoints/v31a_pump_9999_catch0.46...CREEP_fallback. NOT a physicality winner →
+    no scrutiny fired (creep policy). Composite 0.80 but fails GOAL_physical.
+  - v31b_upsweepgate (train-time upsweep_v_min=0.35): catch 0.29, physicality 0.36 — gate didn't force physicality
+    (assist provided the v_up in training; reverts to creep at eval). Ruled out.
+  - INSIGHT for wave 2+: raising catch ≠ fixing behavior. Must make creep IMPOSSIBLE/unrewarding while keeping the
+    pump's catch drive. Levers: capacity (does the creep persist with more memory?), geometry (fly-in runway).
 - **Wave 1 (2026-07-18 ~00:30) LAUNCHED.** Design workflow (6 agents) produced 6 pure-flag specs. Key agent
   finding: my swing_perp reward used WORLD-frame perp speed → a dead hook TRANSLATED wallward earns it (pays the
   creep) — explains v30's failure. Launched top-2 orthogonal creep-attacks (2-arm fast regime):
