@@ -57,4 +57,13 @@ Measured by `scripts/hook_grasp/eval_behavior.py` (deterministic, radius 0.13, c
   tool can only DRAFT, not send; user sees it in Drafts). One draft per event; do NOT draft routine progress.
 
 ## WAVE LOG (append newest at top)
-- (pending) Wave 0: behavior baseline of champion + v30; first DESIGN workflow.
+- **Wave 1 (2026-07-18 ~00:30) LAUNCHED.** Design workflow (6 agents) produced 6 pure-flag specs. Key agent
+  finding: my swing_perp reward used WORLD-frame perp speed → a dead hook TRANSLATED wallward earns it (pays the
+  creep) — explains v30's failure. Launched top-2 orthogonal creep-attacks (2-arm fast regime):
+  - **v31a_pump**: `reward_pump=true,pump_windup_decay=false,pump_windup_weight=8,pump_lift_weight=10,swing_still_weight=3`
+    (pump uses RELATIVE geometry — can't be farmed by translation; swing_still penalizes the exact deadhang metric).
+  - **v31b_upsweepgate**: `attachment.upsweep_v_min=0.35` (creep no longer counts as a catch) `+pump+swing_assist_v0=2.5`.
+  QUEUED for wave 2: standoff-runway-pump (spawn_away_v0), deep-wide-lstm (512x2), explore-the-pump (entropy/noise),
+  spawn-out-swing-in (dist_mu=1.0). Eval both @peak with eval_rslrl + eval_behavior; adversarial-scrutinize anything
+  beating champion composite 0.68 (catch0.31+phys0.37).
+- Wave 0: behavior baseline — champion catches by creep/deadhang (upsweep 0.22, deadhang 0.42, phys 0.37); test built.
