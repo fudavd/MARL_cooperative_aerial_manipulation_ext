@@ -230,7 +230,11 @@ def main():
     jerk = float((jerk_sum / jerk_n).item()) if jerk_n > 0 else float("nan")
 
     swing_amp_norm = min(1.0, swing_amp / SWING_AMP_REF)
-    physicality = round((upsweep_frac + perp_ratio + (1.0 - deadhang_frac) + swing_amp_norm) / 4.0, 4)
+    # Weight the UNGAMEABLE ARC metrics (perp_ratio, swing_amp) heavily. upsweep_frac and (1-deadhang) are partly
+    # MECHANICAL consequences of the catch model (require_upsweep forces v_up>0 on every catch) and the chord-angle
+    # gate (forbids near-vertical catches) -> they inflate easily without a real swing (adversarial audit 2026-07-20).
+    physicality = round(0.35 * perp_ratio + 0.35 * swing_amp_norm
+                        + 0.15 * upsweep_frac + 0.15 * (1.0 - deadhang_frac), 4)
 
     result = {
         "checkpoint": args_cli.checkpoint,
@@ -247,7 +251,10 @@ def main():
         # gates: task goal AND physically-correct behavior
         "GOAL_catch_0.30": catch_rate >= 0.30,
         "GOAL_hold_0.80": hold_gc >= 0.80,
-        "GOAL_physical": (upsweep_frac >= 0.6 and perp_ratio >= 0.55 and deadhang_frac <= 0.15),
+        # Strict gate now REQUIRES a real arc: perp-dominant swing (perp_ratio>=0.60, not the 0.5 skim midpoint)
+        # AND meaningful arc amplitude (swing_amp>=0.20 m), on top of the (weaker) upsweep + low-deadhang criteria.
+        "GOAL_physical": (upsweep_frac >= 0.6 and perp_ratio >= 0.60
+                          and deadhang_frac <= 0.15 and swing_amp >= 0.20),
     }
     result["GOALS_MET_PHYSICAL"] = bool(
         result["GOAL_catch_0.30"] and result["GOAL_hold_0.80"] and result["GOAL_physical"]

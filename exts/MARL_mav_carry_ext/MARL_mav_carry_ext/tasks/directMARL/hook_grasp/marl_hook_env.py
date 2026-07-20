@@ -733,6 +733,17 @@ class MARLHookGraspEnv(DirectMARLEnv):
             if self.cfg.swing_lateral_weight > 0.0:
                 # PENALIZE the sideways skim along the wall face (pivot-relative |v . bar_axis|).
                 swing_shape += -self.cfg.swing_lateral_weight * v_lat_rel.abs() * not_att
+            # ARC AMPLITUDE: reward the hook's DISPLACEMENT from straight-below-the-drone, so the pendulum actually
+            # arcs (not just a fast small wobble). disp = hook - drone anchor (the wire vector). PERPENDICULAR
+            # displacement rewarded (big swing-out in the plane perpendicular to the wall), LATERAL penalized.
+            if self.cfg.arc_perp_weight > 0.0 or self.cfg.arc_lateral_weight > 0.0:
+                disp = hook_pos - drone_pos
+                perp_disp = (disp * wall_normal).sum(-1)          # perpendicular swing-out (arc amplitude)
+                lat_disp = (disp * bar_axis).sum(-1)              # sideways displacement along the bar
+                if self.cfg.arc_perp_weight > 0.0:
+                    swing_shape += self.cfg.arc_perp_weight * torch.clamp(perp_disp.abs(), max=self.cfg.arc_disp_cap) * not_att
+                if self.cfg.arc_lateral_weight > 0.0:
+                    swing_shape += -self.cfg.arc_lateral_weight * lat_disp.abs() * not_att
             if self.cfg.swing_still_weight > 0.0:
                 # PENALIZE the DEAD PENDULUM: hook hanging ~straight under the drone AND barely moving relative to
                 # it. Relative (not world) velocity on purpose -> carrying a dead hook around at speed still counts

@@ -373,6 +373,17 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
     swing_still_weight: float = 0.0     # penalty on the dead hang (hook straight below the drone AND not swinging)
     swing_still_radius: float = 0.15    # m: horizontal hook-under-drone offset scale; exp(-(horiz/r)^2) -> 1 = dead below
     swing_still_speed: float = 0.3      # m/s: hook-vs-drone relative speed at/above which it is NOT a standstill
+    # --- ARC-AMPLITUDE shaping (2026-07-20): reward the pendulum ARC directly, not just its velocity. The velocity
+    # terms (swing_perp) can be satisfied by a small fast wobble; the auditors showed swing_amp stayed ~0.08 m (no
+    # real arc) and perp_ratio ~0.50 (half sideways skim). These reward the hook's DISPLACEMENT from straight-below
+    # the drone, decomposed in the wall frame: PERPENDICULAR displacement (|(hook-drone).wall_normal|) is REWARDED
+    # (a big swing-out in the plane perpendicular to the wall = real arc amplitude), LATERAL displacement
+    # (|(hook-drone).bar_axis|) is PENALIZED (keeps the arc in the perpendicular plane, not skimming along the bar).
+    # Paired with swing_perp (velocity) this rewards being displaced AND moving -> a genuine oscillating arc, and
+    # with the chord-angle gate + require_upsweep a static hold cannot catch. Unattached-phase only. Opt-in (0 = off).
+    arc_perp_weight: float = 0.0        # reward on clamp(|(hook-drone).wall_normal|, max=arc_disp_cap) -- arc amplitude
+    arc_lateral_weight: float = 0.0     # penalty on |(hook-drone).bar_axis| -- sideways (along-bar) displacement
+    arc_disp_cap: float = 0.5          # m: cap on rewarded perpendicular displacement (~wire_length; 0.55*sin(65deg))
 
     # PENDULUM PUMP shaping (raises catch via a REPEATABLE pump-release-lift maneuver -> consistent swing timing,
     # vs scattershot up-sweeps). Two shaping terms on the drone's OWN (controllable) motion; the "stop/reverse to
