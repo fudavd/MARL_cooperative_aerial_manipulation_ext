@@ -35,6 +35,7 @@ gates the "did it actually approach the wall" condition.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import torch
@@ -80,6 +81,12 @@ class HookAttachmentCfg:
     upsweep_v_min: float = 0.12
     """Minimum upward hook speed (m/s, along wall_up) for a contact to count as an engagement when
     ``require_upsweep`` -- a genuine up-stroke, not incidental drift."""
+    min_chord_angle_deg: float = 0.0
+    """PHYSICAL SWING GATE: a catch is only allowed when the wire (chord = drone-anchor -> hook) makes at least
+    this angle FROM VERTICAL. 0 = off (any angle, incl. a hook hanging straight below the drone = dead-hang creep).
+    Set > 0 (e.g. 10 deg) to FORBID catching a near-vertical dangling hook -> the hook must be SWUNG OUT to latch,
+    which makes the perpendicular pendulum up-swing physically necessary and removes the creep/hang catch optimum.
+    The env can anneal this from 0 -> target over training (chord-angle curriculum)."""
 
     # --- slack / detach -----------------------------------------------------------------
     wire_length: float = 0.55
@@ -219,6 +226,13 @@ def update_attachment_state(
     )
     # eligible = a valid contact this step AND we have not already used this dwell's single attempt
     eligible = contact & (~catch_latch) & (~attached)
+    # CHORD-ANGLE gate: forbid latching a near-vertical dangling hook (dead-hang creep). The wire chord
+    # (anchor -> hook) must make at least ``min_chord_angle_deg`` from vertical, i.e. the hook is swung OUT.
+    if cfg.min_chord_angle_deg > 0.0:
+        chord = anchor_pos - hook_pos
+        vert = chord[..., 2].abs() / torch.norm(chord, dim=-1).clamp_min(1e-6)   # |cos(angle from vertical)|
+        swung_out = vert < math.cos(math.radians(cfg.min_chord_angle_deg))
+        eligible = eligible & swung_out
     p_eff = torch.where(eligible, p_catch, torch.zeros_like(p_catch))
     newly_caught = sample_catches(p_eff, generator=generator) & (~attached)
     attached = attached | newly_caught

@@ -81,6 +81,12 @@ class MARLHookGraspEnv(DirectMARLEnv):
         self._capture_start = float(cfg.capture_radius_start)
         if cfg.capture_curriculum:
             self._acfg.capture_radius = self._capture_start
+        # chord-angle curriculum: anneal the min wire-from-vertical catch angle from chord_angle_start_deg up to
+        # attachment.min_chord_angle_deg (the eval gate) over chord_angle_steps. Start permissive so the drone can
+        # first learn to reach the wall, then tighten to forbid the dead-hang creep catch.
+        self._chord_angle_end = float(cfg.attachment.min_chord_angle_deg)
+        if getattr(cfg, "chord_angle_curriculum", False):
+            self._acfg.min_chord_angle_deg = float(cfg.chord_angle_start_deg)
         # hold-time curriculum: current required consecutive-held steps for success (ramped in _update_attachment).
         # Starts short when the curriculum is on, else pinned at the true target.
         self._current_hold_req = (
@@ -467,6 +473,11 @@ class MARLHookGraspEnv(DirectMARLEnv):
         if self.cfg.capture_curriculum:
             frac = min(1.0, self._ctrl_step / max(1, self.cfg.capture_curriculum_steps))
             self._acfg.capture_radius = self._capture_start + (self._capture_end - self._capture_start) * frac
+        # chord-angle curriculum: tighten the min wire-from-vertical catch angle start_deg -> target over
+        # chord_angle_steps, then hold -> a near-vertical dangling hook can no longer latch (forces a swung-out catch).
+        if getattr(self.cfg, "chord_angle_curriculum", False):
+            cfrac = min(1.0, self._ctrl_step / max(1, self.cfg.chord_angle_steps))
+            self._acfg.min_chord_angle_deg = self.cfg.chord_angle_start_deg + (self._chord_angle_end - self.cfg.chord_angle_start_deg) * cfrac
         # hold-time curriculum: ramp the required consecutive-held steps from a short start up to the true
         # hold_success_steps over the first hold_curriculum_steps, so "catch -> hold briefly" is learned first.
         if self.cfg.hold_curriculum:
@@ -708,15 +719,20 @@ class MARLHookGraspEnv(DirectMARLEnv):
             #   vertical -- deliberately untouched here: the catch REQUIRES v_up > upsweep_v_min, and a genuine
             #   perpendicular arc is perpendicular+vertical with zero lateral).
             # Unattached only (once locked we want a taut hold, not a swing).
+            # Use hook velocity RELATIVE TO THE DRONE = the true pendulum SWING velocity about the wire pivot.
+            # (Fix for the world-frame bug: a dead hook TRANSLATED wallward by the drone has world v.n>0 but zero
+            # swing -> it must NOT earn the perpendicular-swing reward. Relative velocity is 0 for a dead hang.)
+            v_swing = hook_vel - self.drone_linear_velocities[:, i]
+            v_perp_rel = (v_swing * wall_normal).sum(-1)     # perpendicular swing (into/out of wall), pivot-relative
+            v_lat_rel = (v_swing * bar_axis).sum(-1)         # sideways swing along the wall face, pivot-relative
             if self.cfg.swing_perp_weight > 0.0:
-                # REWARD |v.n| BOTH ways: swinging back and forth through the wall normal is what pumps pendulum
-                # amplitude. Capped so it cannot be farmed by flying fast.
-                v_perp_abs = torch.clamp(v_normal.abs(), max=self.cfg.swing_perp_cap)
+                # REWARD |v_perp_rel| BOTH ways: swinging back and forth through the wall normal pumps pendulum
+                # amplitude (wall-FACING hook-velocity swings). Capped so it cannot be farmed by flying fast.
+                v_perp_abs = torch.clamp(v_perp_rel.abs(), max=self.cfg.swing_perp_cap)
                 swing_shape += self.cfg.swing_perp_weight * v_perp_abs * not_att
             if self.cfg.swing_lateral_weight > 0.0:
-                # PENALIZE the sideways skim along the wall face (|v . bar_axis|).
-                v_lat = (hook_vel * bar_axis).sum(-1)
-                swing_shape += -self.cfg.swing_lateral_weight * v_lat.abs() * not_att
+                # PENALIZE the sideways skim along the wall face (pivot-relative |v . bar_axis|).
+                swing_shape += -self.cfg.swing_lateral_weight * v_lat_rel.abs() * not_att
             if self.cfg.swing_still_weight > 0.0:
                 # PENALIZE the DEAD PENDULUM: hook hanging ~straight under the drone AND barely moving relative to
                 # it. Relative (not world) velocity on purpose -> carrying a dead hook around at speed still counts

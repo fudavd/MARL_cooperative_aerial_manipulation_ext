@@ -37,6 +37,8 @@ parser.add_argument("--actor_history_len", type=int, default=0,
                     help="ACTOR frame-stack depth H used in training (0 -> env history_len); must match checkpoint.")
 parser.add_argument("--policy_kv", type=str, default="",
                     help="ActorCriticRecurrent overrides — MUST match training arch or the checkpoint won't load.")
+parser.add_argument("--env_kv", type=str, default="",
+                    help="env_cfg overrides at eval (e.g. 'attachment.min_chord_angle_deg=10'); match the TRUE task.")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, _ = parser.parse_known_args()
 sys.argv = [sys.argv[0]]
@@ -81,6 +83,20 @@ def main():
     if args_cli.indi_residual or args_cli.actor_history_len:
         H = args_cli.actor_history_len or env_cfg.history_len
         apply_indi_residual_cfg(env_cfg, actor_history_len=H, residual=args_cli.indi_residual)
+    for tok in args_cli.env_kv.split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        k, _, v = tok.partition("=")
+        lo = v.strip().lower()
+        val = (lo == "true") if lo in ("true", "false") else (
+            int(v) if v.strip().lstrip("-").isdigit() else float(v))
+        obj, attr = (env_cfg, k.strip())
+        if "." in k:
+            head, attr = k.strip().split(".", 1)
+            obj = getattr(env_cfg, head)
+        setattr(obj, attr, val)
+        print(f"[eval-rslrl] env override: {k.strip()} = {val}")
 
     env = gym.make(args_cli.task, cfg=env_cfg)
     base = env.unwrapped

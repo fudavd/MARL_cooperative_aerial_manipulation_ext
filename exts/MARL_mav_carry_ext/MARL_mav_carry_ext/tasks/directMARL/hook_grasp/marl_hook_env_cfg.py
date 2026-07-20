@@ -92,7 +92,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=[FLYHOOK_HOOK_BODY]),
-            "mass_distribution_params": (0.05, 0.05),   # kg: fixed 50 g (lo == hi -> no randomization)
+            "mass_distribution_params": (0.20, 0.20),   # kg: fixed 200 g (heavier bob -> stronger pendulum, resists creep/hang)
             "operation": "abs",
         },
     )
@@ -216,6 +216,16 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
     capture_curriculum: bool = True
     capture_radius_start: float = 0.08        # loose bootstrap radius (m); anneals down to attachment.capture_radius
     capture_curriculum_steps: int = 120000    # control steps to anneal start -> end (~1:1 with trainer timesteps)
+
+    # --- CHORD-ANGLE curriculum (physical-swing gate; see attachment.min_chord_angle_deg) ------------------
+    # Anneal the min wire-from-vertical angle required for a catch from ``chord_angle_start_deg`` -> the target
+    # ``attachment.min_chord_angle_deg`` over ``chord_angle_steps`` control steps. Start at 0 (any angle catches,
+    # so the drone learns to reach the wall) then tighten so a near-vertical dangling hook can NO LONGER latch ->
+    # forces a genuine swung-out pendulum up-swing. EVAL-SAFE: chord_angle_curriculum=False -> the gate is pinned
+    # at attachment.min_chord_angle_deg (eval scripts disable it, so eval uses the full gate). Default OFF.
+    chord_angle_curriculum: bool = False
+    chord_angle_start_deg: float = 0.0
+    chord_angle_steps: int = 60000
 
     # --- spawn curriculum: FIXED-MEAN GAUSSIAN distance, GROWING std (reverse curriculum) ------------------
     # The drone spawns in front of its assigned wall at a radial distance drawn from a GAUSSIAN whose MEAN is
