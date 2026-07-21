@@ -57,6 +57,15 @@ Measured by `scripts/hook_grasp/eval_behavior.py` (deterministic, radius 0.13, c
   tool can only DRAFT, not send; user sees it in Drafts). One draft per event; do NOT draft routine progress.
 
 ## WAVE LOG (append newest at top)
+- **v41 above-box penalty: MEASURED, it WORKS (correcting a frame-based misread).** New metric over_box_frac (fraction
+  of steps the drone is horizontally over the box footprint = parked on top). **v37a (no penalty, any-dir gate):
+  over_box_frac 0.88 — confirms the user's "always on top" complaint. v41 (above_box_penalty=6 + positive-outward
+  10deg gate, 300g): over_box_frac 0.26** — the penalty pushed the drone OFF the top ~70% of the time (hero/last
+  frames just caught the residual 26%; "still on top" was a wrong frame read — MEASURE, don't eyeball). BUT catch
+  0.37->0.088: **v37a caught 0.37 BECAUSE it sat on top (any-dir gate let it hook from above); v41 is physically
+  correct (off-top, positive gate, upsweep 0.89) but the hook-blind actor can't reliably do the outside swing-catch.**
+  ⇒ positive gate + above-box penalty BOTH work as designed (force correct behavior); the cost is catch rate — same
+  observability wall: enforce WHERE/HOW to catch, but can't learn the big controlled outside-swing to do it well.
 - **v37 pendulum-ENERGY reward VERDICT (2026-07-21): NEGATIVE for the arc, but best PRACTICAL policy + likely ROOT
   CAUSE identified.** Rewarding hook PE (g*(z_hook-z_drone+wire_length)) + KE (0.5*|v_hook-v_drone|^2), the most
   physically-principled lever: **v37a (energy+10deg gate): catch 0.47, hold 0.94, deadhang 0.145, jerk 12.5 — best
