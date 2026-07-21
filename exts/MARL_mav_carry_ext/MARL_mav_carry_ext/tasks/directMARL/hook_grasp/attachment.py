@@ -88,11 +88,11 @@ class HookAttachmentCfg:
     which makes the perpendicular pendulum up-swing physically necessary and removes the creep/hang catch optimum.
     The env can anneal this from 0 -> target over training (chord-angle curriculum)."""
     chord_angle_perp_only: bool = False
-    """When True, the ``min_chord_angle_deg`` swing-out is measured ONLY in the WALL-NORMAL (perpendicular) plane
-    (angle via |chord . wall_normal| / |chord| = sin of the perpendicular swing angle), NOT the total angle from
-    vertical. This forbids satisfying the gate by swinging the hook out SIDEWAYS along the bar (which the
-    direction-agnostic gate allowed -> the policy learned a lateral flick, perp_ratio fell). Forces a genuinely
-    PERPENDICULAR (wall-facing) pendulum swing to catch."""
+    """When True, the ``min_chord_angle_deg`` swing-out is measured as the SIGNED, POSITIVE (OUTWARD) component in
+    the WALL-NORMAL direction: sin(angle) = (chord . wall_normal)/|chord|, requiring chord.n > sin(angle). Since
+    wall_normal points OUTWARD, this demands the drone be OUTSIDE the wall with the hook swung UP onto the bar from
+    outside (the correct J-hook catch). It forbids BOTH the sideways along-bar flick AND the drone-on-top /
+    into-wall accidental catch (drone hovering over the basket bobbing the hook down)."""
 
     # --- slack / detach -----------------------------------------------------------------
     wire_length: float = 0.55
@@ -238,10 +238,13 @@ def update_attachment_state(
         chord = anchor_pos - hook_pos
         clen = torch.norm(chord, dim=-1).clamp_min(1e-6)
         if getattr(cfg, "chord_angle_perp_only", False):
-            # require swing-out in the WALL-NORMAL (perpendicular) plane: sin(perp angle) = |chord.n|/|chord|.
-            # A sideways (along-bar) swing-out has a small normal component -> fails -> forces wall-facing swing.
-            perp_frac = (chord * wall_normal).sum(-1).abs() / clen
-            swung_out = perp_frac > math.sin(math.radians(cfg.min_chord_angle_deg))
+            # require swing-out at a POSITIVE (OUTWARD) wall angle: sin(perp angle) = (chord . wall_normal)/|chord|,
+            # SIGNED. wall_normal points OUTWARD, so chord.n > 0 means the drone/anchor is OUTSIDE the wall relative
+            # to the hook -> the hook is swung UP onto the bar FROM OUTSIDE (correct J-hook catch). This forbids BOTH
+            # the sideways along-bar flick (small normal component) AND the drone-on-top / into-wall catch
+            # (chord.n <= 0, drone hovering over the basket bobbing the hook down = accidental latch).
+            perp_signed = (chord * wall_normal).sum(-1) / clen
+            swung_out = perp_signed > math.sin(math.radians(cfg.min_chord_angle_deg))
         else:
             vert = chord[..., 2].abs() / clen                                    # |cos(angle from vertical)|
             swung_out = vert < math.cos(math.radians(cfg.min_chord_angle_deg))

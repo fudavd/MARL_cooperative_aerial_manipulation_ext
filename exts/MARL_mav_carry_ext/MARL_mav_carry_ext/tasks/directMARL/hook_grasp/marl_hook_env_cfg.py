@@ -450,11 +450,15 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
                                  # runaway / nonfinite) -- NOT on success or timeout. Makes crashing clearly worse
                                  # than living, so early exploration can't collapse into "die fast".
 
-    # control regularizers (reused from the hover/transport task)
-    action_smoothness_weight = 0.5
-    body_rate_penalty_weight = 0.5
+    # control regularizers (2026-07-21 REBALANCED vs the hover baseline of 0.5 each). In hover these 0.5 weights
+    # dominate the return, but here the big task rewards (catch 20 / success 80 / lock / tension) dwarf a 0.5
+    # regularizer, so the policy ignored them -> it hovered ON TOP of the basket bobbing up/down (props over the
+    # hook = downwash into the load) and latched on accident. Strengthened so smoothness + downwash matter again:
+    action_smoothness_weight = 1.0   # 0.5->1.0: damp the erratic up/down bobbing (random-swing accidental latch)
+    body_rate_penalty_weight = 1.0   # 0.5->1.0: damp erratic attitude thrashing
     force_penalty_weight = 0.5
-    downwash_rew_weight = 0.5     # reward keeping the hook out of the prop-wash line (hover downwash analog)
+    downwash_rew_weight = 3.0     # 0.5->3.0: strongly reward keeping the hook OFF the prop-wash axis -> the drone
+                                  # must pull the wire at an angle from OUTSIDE (props not over the load), not hover on top
     downwash_scale = 3.0
     swing_limit_weight = 2.0      # penalize the wire swinging up near the props; now the SOLE entanglement
                                   # deterrent (entanglement is no longer a hard termination), so strengthened 4x
