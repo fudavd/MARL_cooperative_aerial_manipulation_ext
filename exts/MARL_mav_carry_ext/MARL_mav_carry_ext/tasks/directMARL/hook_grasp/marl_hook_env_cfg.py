@@ -92,7 +92,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=[FLYHOOK_HOOK_BODY]),
-            "mass_distribution_params": (0.20, 0.20),   # kg: fixed 200 g (heavier bob -> stronger pendulum, resists creep/hang)
+            "mass_distribution_params": (0.50, 0.50),   # kg: fixed 500 g (very heavy bob ~drone mass 0.6 -> pendulum dominates, resists small flicks)
             "operation": "abs",
         },
     )
