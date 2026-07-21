@@ -9,7 +9,24 @@
 
 ---
 
-# SOLUTION — CURRENT BEST (2026-07-17)
+# ⚠️ PHYSICAL-CORRECTNESS STATUS (2026-07-21) — read first
+
+The "catch reliably" goal is met (catch 0.31–0.60 by recipe, hold 0.94–0.98). The **PHYSICALLY-CORRECT swing goal is
+NOT yet met** — no policy performs a genuine perpendicular pendulum up-swing; catches are still creep / small-flick /
+hook-from-above. Proven by `eval_behavior.py` and confirmed by blind adversarial audits.
+- **THE honest metrics: `perp_ratio` (want ≥0.60; stuck ~0.50 = half sideways skim) and `swing_amp` (want ≥0.20 m;
+  stuck ~0.08 m = no real arc).** `upsweep_frac`/`deadhang_frac` are PARTLY GAMEABLE (require_upsweep forces v_up>0 on
+  every catch; the chord gate mechanically forbids near-vertical catches) → behavior test now weights them low.
+- **Chord-angle catch gate** (`attachment.min_chord_angle_deg`, annealed): forbids latching a hook within N° of
+  vertical → dead-hang creep catch becomes physically impossible. 10° made catch HONEST (0.44) but audit REFUTED the
+  "real swing" claim (no arc). Now testing 30°/20° + a direct ARC-AMPLITUDE reward (v35).
+- **Arc reward** (`arc_perp`/`arc_lateral`): rewards perpendicular swing-out DISPLACEMENT, to force a real arc. Hook
+  mass 50g→200g (stronger pendulum; also dropped jerk ~100→15). Best less-creepy ckpt: `v34a_chordgate_9999_...`
+  (catch 0.44 @10° gate). Best CATCH: `v32a...catch0.60` (creeps). Full trail: `experiments/WEEKEND_OPS.md`.
+
+---
+
+# SOLUTION — CURRENT BEST (2026-07-17) [catch/hold goals; physicality: see status above]
 
 **HOLD gate robustly solved; CATCH gate met on the BEST of 3 seeds (seed-sensitive — see reproducibility below).**
 Best checkpoint (seed 42) on the deterministic true-task eval (radius 0.13, fixed 50 g tip, robust n=1078 eps):

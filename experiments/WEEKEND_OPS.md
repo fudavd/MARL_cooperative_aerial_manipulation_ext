@@ -57,6 +57,29 @@ Measured by `scripts/hook_grasp/eval_behavior.py` (deterministic, radius 0.13, c
   tool can only DRAFT, not send; user sees it in Drafts). One draft per event; do NOT draft routine progress.
 
 ## WAVE LOG (append newest at top)
+- **v35 arc-amplitude fix (2026-07-21 ~00:xx).** Post-scrutiny fix: reward the pendulum ARC DIRECTLY. New reward
+  terms `arc_perp_weight` (reward |(hook-drone).wall_normal| = perpendicular swing-out displacement / arc amplitude)
+  + `arc_lateral_weight` (penalize along-bar displacement). Behavior test REWEIGHTED: physicality now 0.35*perp_ratio
+  + 0.35*swing_amp + 0.15*upsweep + 0.15*(1-deadhang); GOAL_physical now REQUIRES perp_ratio>=0.60 AND swing_amp>=0.20
+  (the ungameable arc metrics). Gate raised to 30deg (user). commit 3ae6b4d.
+  - **★ KEY SIGNAL: the 30deg gate + arc reward FINALLY produces a real ARC.** v35a_arc30 was OOM-killed at only
+    iter 1292/10k, yet its partial ckpt already hit **swing_amp 0.336 m** (vs ~0.08 m for everything before = 4x, a
+    genuine ~0.3 m pendulum arc) — because a catch now requires the hook swung out >=30deg, physically forcing the
+    arc. catch only 0.03 (undertrained + hard gate). **RELAUNCHED as v35a2_arc30 (single arm, to 10k)** — this is the
+    most promising physicality lever found. v35b_arc20 (20deg, full 10k): catch 0.30, swing_amp 0.10, perp_ratio 0.46
+    — 20deg too weak to force the arc. ⇒ the GATE ANGLE is what forces swing_amp; 30deg >> 20deg. Watch: does catch
+    recover by 10k while swing_amp/perp_ratio stay high? If yes -> the real swing. Then adversarial-scrutinize.
+- **v34a chord-gate: SCRUTINY REFUTED (both auditors, conf 0.80/0.82) — honest partial progress, NOT a real swing.**
+  v34a (chord-angle gate 10deg + 200g hook + relative-frame swing reward, proximity removed): catch 0.41/hold 0.94,
+  upsweep 0.22->0.61, deadhang 0.42->0.22, jerk ~100->15, physicality 0.52. TWO BLIND AUDITORS reproduced the numbers
+  at fresh seed but REFUTED the "genuine perpendicular swing" claim: (1) the UNGAMEABLE arc metrics didn't move —
+  perp_ratio 0.50 (=equal skim), swing_amp 0.08 m (=20% of a real 0.4 m arc); GOAL_physical=False. (2) upsweep 0.61 is
+  ~TAUTOLOGICAL (require_upsweep already forbids v_up<=0.12 catches), deadhang drop is partly FORCED by the gate,
+  jerk 15 is measured only while ATTACHED and confounded by the 4x heavier hook. (3) baseline is apples-to-oranges
+  (old 50g/no-gate task). ⇒ **the chord-gate makes catch HONEST under a real constraint (0.44, verified) and cuts
+  dead-hang, but the pendulum ARC is still not there.** Exposed a FLAW in the behavior test (upsweep/deadhang gameable)
+  → fixed in v35. The chord-gate impl IS correct + non-bypassable (verified). Best ckpt preserved: v34a_chordgate_...
+  Verdict: adversarial mechanism worked — prevented a false "solved" claim. Video: _render_rslrl/v34a_chordgate_1env.mp4.
 - **Wave 3 (2026-07-18 ~20:00) LAUNCHED — combine the two wave-2 winning directions.**
   - **v33a_combo**: 512x2 rnn (catch capacity) + fly-in runway (physicality) + pump + swing_still + swing_lateral=3.
   - **v33b_hardrunway**: push physicality harder — spawn_dist_mu=0.8, spawn_away_v0=2.5, swing_still=6, swing_lateral=4,
