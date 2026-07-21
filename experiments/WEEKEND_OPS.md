@@ -57,6 +57,20 @@ Measured by `scripts/hook_grasp/eval_behavior.py` (deterministic, radius 0.13, c
   tool can only DRAFT, not send; user sees it in Drafts). One draft per event; do NOT draft routine progress.
 
 ## WAVE LOG (append newest at top)
+- **v37 pendulum-ENERGY reward VERDICT (2026-07-21): NEGATIVE for the arc, but best PRACTICAL policy + likely ROOT
+  CAUSE identified.** Rewarding hook PE (g*(z_hook-z_drone+wire_length)) + KE (0.5*|v_hook-v_drone|^2), the most
+  physically-principled lever: **v37a (energy+10deg gate): catch 0.47, hold 0.94, deadhang 0.145, jerk 12.5 — best
+  practical (reliable, low-creep, smooth) — but swing_amp 0.10, perp_ratio 0.44 (arc STILL unmoved).** v37b (energy+
+  15deg perp): deadhang 0.05 (creep gone) but catch 0.11, swing_amp 0.05. **swing_amp & perp_ratio are now IMMOVABLE
+  across velocity-, displacement-, AND energy-based rewards x every gate.**
+  - **ROOT CAUSE (well-supported): the actor is HOOK-BLIND — no hook position/velocity, only the INDI force residual.
+    A large CONTROLLED perpendicular pendulum arc requires timing the swing PHASE, which needs to OBSERVE the hook;
+    the residual (force) enables reactive HOLD but not open-loop control of a big arc. PPO therefore converges to a
+    small controllable motion regardless of reward. This is an OBSERVABILITY limit, not a reward-tuning gap —
+    reward shaping cannot create controllability the obs doesn't provide.** ⇒ a genuine visible swing likely
+    REQUIRES giving the actor hook swing-phase obs (relaxing the hook-blind premise) — a task-definition decision.
+  - Solid deliverables: catch (v37a 0.47 / v32a 0.60), dead-hang ELIMINATED (v37b 0.05), hold 0.94, jerk 12.5.
+    Best practical ckpt: v37a_energy_gate10_...PRACTICALbest.
 - **v36 perp-gate VERDICT (2026-07-21): NEGATIVE. Gates cap out — they don't create the arc.** v36 (perpendicular-only
   20deg gate + arc reward, full 10k, RAM stable): **catch 0.022 (collapsed), perp_ratio 0.41, swing_amp 0.058** — the
   arc metrics UNMOVED, catch destroyed. The perp gate only restricts WHERE a catch counts; the drone still approaches
