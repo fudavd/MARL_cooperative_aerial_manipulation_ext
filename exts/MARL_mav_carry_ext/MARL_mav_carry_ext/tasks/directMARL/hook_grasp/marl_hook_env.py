@@ -202,7 +202,7 @@ class MARLHookGraspEnv(DirectMARLEnv):
                 "approach", "proximity", "impact_perp", "impact_up",
                 "catch", "success", "alive", "death", "lock", "tension", "wall_pull", "progress", "detach",
                 "action_smoothness", "body_rate_penalty", "force_penalty", "downwash", "swing_limit", "pump",
-                "swing_shape",
+                "swing_shape", "above_box",
             ]
         }
         self.metrics = {
@@ -639,6 +639,7 @@ class MARLHookGraspEnv(DirectMARLEnv):
         swing_limit = torch.zeros(self.num_envs, device=self.device)
         pump = torch.zeros(self.num_envs, device=self.device)
         swing_shape = torch.zeros(self.num_envs, device=self.device)
+        above_box = torch.zeros(self.num_envs, device=self.device)
         for i in range(self._num_drones):
             drone_pos = self.drone_positions[:, i]
             hook_pos = self.hook_positions[:, i]
@@ -765,6 +766,17 @@ class MARLHookGraspEnv(DirectMARLEnv):
                 slow = torch.clamp(1.0 - v_rel / self.cfg.swing_still_speed, min=0.0)
                 swing_shape += -self.cfg.swing_still_weight * below * slow * not_att
 
+            # --- ABOVE-BOX penalty: penalize the drone hovering horizontally OVER the box footprint (props over the
+            # load). depth = how far inside the (margin-expanded) footprint in the basket frame; 0 when outside. This
+            # is the DIRECT "get off the top" cost the downwash REWARD couldn't provide. Active always (approach AND
+            # hold) -> the drone must work the bar from OUTSIDE the wall, not park on top. -------------------------
+            if self.cfg.above_box_penalty_weight > 0.0:
+                drone_bf = quat_rotate_inverse(self.basket_quat_w, drone_pos - self.basket_pos_w)
+                inside_x = torch.clamp(self.cfg.basket_half_x + self.cfg.above_box_margin - drone_bf[:, 0].abs(), min=0.0)
+                inside_y = torch.clamp(self.cfg.basket_half_y + self.cfg.above_box_margin - drone_bf[:, 1].abs(), min=0.0)
+                over = (inside_x > 0) & (inside_y > 0)
+                above_box += self.cfg.above_box_penalty_weight * torch.minimum(inside_x, inside_y) * over.float()
+
             # --- locking: reward staying locked (attached) --------------------------------
             lock += self.cfg.lock_weight * attached.float()
             # --- taut hold: reward keeping the wire SAFELY TAUT -- the drone->attach-point distance kept a
@@ -837,6 +849,7 @@ class MARLHookGraspEnv(DirectMARLEnv):
         r_swing_limit = -swing_limit * dt
         r_pump = pump * dt                                      # pendulum pump-release-lift shaping (see loop)
         r_swing_shape = swing_shape * dt                        # perpendicular-swing shaping: +|v.n|, -|v.bar_axis|, -deadhang
+        r_above_box = -above_box * dt                           # penalty for the drone hovering over the box footprint (props over load)
 
         # CONSISTENT event bonuses (applied EVERY attach / detach, NOT one-off): +catch_bonus on each attach,
         # -detach_penalty on each detach. The two are BALANCED (equal magnitude, cfg), so a spurious
@@ -884,7 +897,7 @@ class MARLHookGraspEnv(DirectMARLEnv):
             "lock": r_lock, "tension": r_tension, "wall_pull": r_wall_pull, "progress": r_progress,
             "action_smoothness": r_smooth, "body_rate_penalty": r_body_rate, "force_penalty": r_effort,
             "downwash": r_downwash, "swing_limit": r_swing_limit, "pump": r_pump,
-            "swing_shape": r_swing_shape,
+            "swing_shape": r_swing_shape, "above_box": r_above_box,
         }
         for k, v in reward_terms.items():
             self._episode_sums[k] += v

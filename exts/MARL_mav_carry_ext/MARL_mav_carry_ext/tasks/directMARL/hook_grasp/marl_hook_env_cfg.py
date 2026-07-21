@@ -462,6 +462,13 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
     downwash_scale = 3.0
     swing_limit_weight = 2.0      # penalize the wire swinging up near the props; now the SOLE entanglement
                                   # deterrent (entanglement is no longer a hard termination), so strengthened 4x
+    # ABOVE-BOX penalty (2026-07-21): the downwash REWARD couldn't stop the drone hovering ON TOP of the basket
+    # (props over the load) -- it only forgoes reward there, no cost, so the approach reward (15) kept the drone
+    # parked above lowering the hook down. This is a DIRECT PENALTY for the drone being horizontally OVER the box
+    # footprint: penalty = weight * min(hx-|x_bf|, hy-|y_bf|) clamped>=0 (depth inside the footprint, in the basket
+    # frame). 0 when the drone is outside the footprint (where it should be to catch), grows as it moves over the box.
+    above_box_penalty_weight = 6.0
+    above_box_margin = 0.10       # m: extra footprint margin so the drone is pushed a bit CLEAR of the rim, not just inside
 
     # success = attached & held (taut) for this many consecutive control steps. Reaching it grants the one-off
     # success_bonus (above). The hold-time curriculum ramps the required hold from hold_success_steps_start ->
