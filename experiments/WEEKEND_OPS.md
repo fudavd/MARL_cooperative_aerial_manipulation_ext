@@ -57,6 +57,16 @@ Measured by `scripts/hook_grasp/eval_behavior.py` (deterministic, radius 0.13, c
   tool can only DRAFT, not send; user sees it in Drafts). One draft per event; do NOT draft routine progress.
 
 ## WAVE LOG (append newest at top)
+- **v36 perp-gate VERDICT (2026-07-21): NEGATIVE. Gates cap out — they don't create the arc.** v36 (perpendicular-only
+  20deg gate + arc reward, full 10k, RAM stable): **catch 0.022 (collapsed), perp_ratio 0.41, swing_amp 0.058** — the
+  arc metrics UNMOVED, catch destroyed. The perp gate only restricts WHERE a catch counts; the drone still approaches
+  with a small lateral skim and rarely stumbles into a valid catch (17/771 eps). ⇒ **CONCLUSION across v30–v36: gates
+  (chord-angle, perp) reliably ELIMINATE dead-hang (0.42->0.12) but do NOT teach a perpendicular pendulum arc; the
+  arc reward's early amplitude (0.34) is untrained flailing that training removes; perp_ratio stuck 0.40–0.51,
+  swing_amp stuck 0.06–0.10 across EVERY reward/gate/mass/capacity lever.** The trained policy always converges to a
+  small-amplitude precise catch — a big energetic swing is not the efficient solution it finds. Gate/reward shaping is
+  exhausted for the arc; a genuine swing likely needs a different mechanism (imitation of a scripted pump, energy-based
+  objective, or an action-space/task rethink). Reliable CATCH is solved (v32a 0.60); dead-hang eliminated (v35c 0.12).
 - **v35 arc-amplitude fix (2026-07-21 ~00:xx).** Post-scrutiny fix: reward the pendulum ARC DIRECTLY. New reward
   terms `arc_perp_weight` (reward |(hook-drone).wall_normal| = perpendicular swing-out displacement / arc amplitude)
   + `arc_lateral_weight` (penalize along-bar displacement). Behavior test REWEIGHTED: physicality now 0.35*perp_ratio
