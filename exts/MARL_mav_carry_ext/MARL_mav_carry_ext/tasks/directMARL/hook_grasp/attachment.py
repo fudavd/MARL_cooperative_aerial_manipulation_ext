@@ -87,6 +87,12 @@ class HookAttachmentCfg:
     Set > 0 (e.g. 10 deg) to FORBID catching a near-vertical dangling hook -> the hook must be SWUNG OUT to latch,
     which makes the perpendicular pendulum up-swing physically necessary and removes the creep/hang catch optimum.
     The env can anneal this from 0 -> target over training (chord-angle curriculum)."""
+    chord_angle_perp_only: bool = False
+    """When True, the ``min_chord_angle_deg`` swing-out is measured ONLY in the WALL-NORMAL (perpendicular) plane
+    (angle via |chord . wall_normal| / |chord| = sin of the perpendicular swing angle), NOT the total angle from
+    vertical. This forbids satisfying the gate by swinging the hook out SIDEWAYS along the bar (which the
+    direction-agnostic gate allowed -> the policy learned a lateral flick, perp_ratio fell). Forces a genuinely
+    PERPENDICULAR (wall-facing) pendulum swing to catch."""
 
     # --- slack / detach -----------------------------------------------------------------
     wire_length: float = 0.55
@@ -230,8 +236,15 @@ def update_attachment_state(
     # (anchor -> hook) must make at least ``min_chord_angle_deg`` from vertical, i.e. the hook is swung OUT.
     if cfg.min_chord_angle_deg > 0.0:
         chord = anchor_pos - hook_pos
-        vert = chord[..., 2].abs() / torch.norm(chord, dim=-1).clamp_min(1e-6)   # |cos(angle from vertical)|
-        swung_out = vert < math.cos(math.radians(cfg.min_chord_angle_deg))
+        clen = torch.norm(chord, dim=-1).clamp_min(1e-6)
+        if getattr(cfg, "chord_angle_perp_only", False):
+            # require swing-out in the WALL-NORMAL (perpendicular) plane: sin(perp angle) = |chord.n|/|chord|.
+            # A sideways (along-bar) swing-out has a small normal component -> fails -> forces wall-facing swing.
+            perp_frac = (chord * wall_normal).sum(-1).abs() / clen
+            swung_out = perp_frac > math.sin(math.radians(cfg.min_chord_angle_deg))
+        else:
+            vert = chord[..., 2].abs() / clen                                    # |cos(angle from vertical)|
+            swung_out = vert < math.cos(math.radians(cfg.min_chord_angle_deg))
         eligible = eligible & swung_out
     p_eff = torch.where(eligible, p_catch, torch.zeros_like(p_catch))
     newly_caught = sample_catches(p_eff, generator=generator) & (~attached)

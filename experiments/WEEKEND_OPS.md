@@ -69,6 +69,14 @@ Measured by `scripts/hook_grasp/eval_behavior.py` (deterministic, radius 0.13, c
     most promising physicality lever found. v35b_arc20 (20deg, full 10k): catch 0.30, swing_amp 0.10, perp_ratio 0.46
     — 20deg too weak to force the arc. ⇒ the GATE ANGLE is what forces swing_amp; 30deg >> 20deg. Watch: does catch
     recover by 10k while swing_amp/perp_ratio stay high? If yes -> the real swing. Then adversarial-scrutinize.
+  - **v35a/v35a2 OOM ROOT CAUSE + v35c VERDICT (2026-07-21).** 30deg gate crashed at seed-deterministic iter ~1292:
+    early catch ~0.001 -> drone flails -> constant resets -> Isaac USD stage-recomposition memory leak -> OOM SIGTERM.
+    FIXED via slow chord anneal (120k steps) + lower weights -> **v35c_arc30_slow** ran full 10k, RAM stable 26G.
+    v35c honest eval (30deg gate): catch 0.15, **deadhang 0.42->0.117 (creep ELIMINATED)**, but **swing_amp 0.058,
+    perp_ratio 0.38 (WORSE) — NO perpendicular arc.** The undertrained swing_amp 0.34 was FLAILING; trained policy
+    converged to a SMALL LATERAL FLICK. ⇒ **the chord-angle gate is DIRECTION-AGNOSTIC (angle from vertical, any
+    azimuth) -> the drone swings out SIDEWAYS along the bar to satisfy it, not perpendicular.** NEXT FIX: make the
+    gate require swing-out in the WALL-NORMAL plane (perpendicular angle), directly attacking perp_ratio.
 - **v34a chord-gate: SCRUTINY REFUTED (both auditors, conf 0.80/0.82) — honest partial progress, NOT a real swing.**
   v34a (chord-angle gate 10deg + 200g hook + relative-frame swing reward, proximity removed): catch 0.41/hold 0.94,
   upsweep 0.22->0.61, deadhang 0.42->0.22, jerk ~100->15, physicality 0.52. TWO BLIND AUDITORS reproduced the numbers
