@@ -744,6 +744,16 @@ class MARLHookGraspEnv(DirectMARLEnv):
                     swing_shape += self.cfg.arc_perp_weight * torch.clamp(perp_disp.abs(), max=self.cfg.arc_disp_cap) * not_att
                 if self.cfg.arc_lateral_weight > 0.0:
                     swing_shape += -self.cfg.arc_lateral_weight * lat_disp.abs() * not_att
+            # PENDULUM ENERGY (see cfg.hook_pe_weight / hook_ke_weight): reward the hook's mechanical energy directly.
+            if self.cfg.hook_pe_weight > 0.0:
+                # specific POTENTIAL energy vs the drone/pivot height: 0 at dead-hang (hook wire_length below), rises
+                # as the hook swings UP toward the drone level -> directly rewards swing amplitude / height gained.
+                pe = 9.81 * torch.clamp(hook_pos[:, 2] - drone_pos[:, 2] + self._acfg.wire_length, min=0.0)
+                swing_shape += self.cfg.hook_pe_weight * pe * not_att
+            if self.cfg.hook_ke_weight > 0.0:
+                # specific KINETIC energy RELATIVE to the drone (the swing's motion, not gameable by flying fast).
+                v_rel2 = torch.clamp((v_swing * v_swing).sum(-1), max=self.cfg.hook_ke_cap)
+                swing_shape += self.cfg.hook_ke_weight * 0.5 * v_rel2 * not_att
             if self.cfg.swing_still_weight > 0.0:
                 # PENALIZE the DEAD PENDULUM: hook hanging ~straight under the drone AND barely moving relative to
                 # it. Relative (not world) velocity on purpose -> carrying a dead hook around at speed still counts

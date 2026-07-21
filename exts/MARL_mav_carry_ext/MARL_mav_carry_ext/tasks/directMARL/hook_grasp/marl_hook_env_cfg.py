@@ -384,6 +384,17 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
     arc_perp_weight: float = 0.0        # reward on clamp(|(hook-drone).wall_normal|, max=arc_disp_cap) -- arc amplitude
     arc_lateral_weight: float = 0.0     # penalty on |(hook-drone).bar_axis| -- sideways (along-bar) displacement
     arc_disp_cap: float = 0.5          # m: cap on rewarded perpendicular displacement (~wire_length; 0.55*sin(65deg))
+    # --- PENDULUM-ENERGY shaping (2026-07-21): reward the hook's mechanical energy directly -- what a real pump
+    # maximizes. This targets the swing itself, not a positional/velocity proxy (which trained policies collapsed).
+    #   POTENTIAL energy (specific, relative to the drone / pivot height): g*(z_hook - z_drone + wire_length) -> 0
+    #     when the hook hangs straight below (dead-hang, lowest point), rises as it swings UP the pendulum arc.
+    #   KINETIC energy (specific, RELATIVE to the drone): 0.5*|v_hook - v_drone|^2 -> the swing's motion; relative
+    #     frame so it CANNOT be farmed by translating the whole system at speed (the world-frame bug that killed v30).
+    # Together (PE+KE) = the pendulum's mechanical energy -> rewarding it pumps a big energetic swing. Unattached-phase
+    # only. Opt-in (0 = off). Weights scale specific energy (per kg); the fixed 200 g bob is just a constant factor.
+    hook_pe_weight: float = 0.0        # reward hook POTENTIAL energy vs drone height: g*(z_hook - z_drone + wire_length)
+    hook_ke_weight: float = 0.0        # reward hook KINETIC energy vs drone: 0.5*|v_hook - v_drone|^2 (swing energy)
+    hook_ke_cap: float = 4.0           # m^2/s^2: cap on |v_hook - v_drone|^2 in the KE term (anti reward-explosion)
 
     # PENDULUM PUMP shaping (raises catch via a REPEATABLE pump-release-lift maneuver -> consistent swing timing,
     # vs scattershot up-sweeps). Two shaping terms on the drone's OWN (controllable) motion; the "stop/reverse to
