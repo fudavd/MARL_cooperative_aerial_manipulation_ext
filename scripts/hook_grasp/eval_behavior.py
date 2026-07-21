@@ -69,6 +69,7 @@ from rsl_rl.runners import OnPolicyRunner
 
 import MARL_mav_carry_ext.tasks  # noqa: F401
 import isaaclab_tasks  # noqa: F401
+from isaaclab.utils.math import quat_rotate_inverse
 from isaaclab.envs import DirectMARLEnv
 from isaaclab_tasks.utils import parse_env_cfg
 
@@ -154,6 +155,7 @@ def main():
     perp_sum = torch.zeros((), device=dev); lat_sum = torch.zeros((), device=dev)
     dead_n = torch.zeros((), device=dev); near_n = torch.zeros((), device=dev)
     jerk_sum = torch.zeros((), device=dev); jerk_n = torch.zeros((), device=dev)
+    overbox_n = torch.zeros((), device=dev); step_n = torch.zeros((), device=dev)  # drone-over-box-footprint fraction
     hook_h_hist = torch.zeros(E, SWING_WINDOW, device=dev)
     amp_sum = torch.zeros((), device=dev); amp_n = torch.zeros((), device=dev)
 
@@ -173,6 +175,11 @@ def main():
         hook_bar = torch.norm(hook_pos - bar_pos, dim=-1)
         attached = base.attached.any(dim=-1)
         newly = base._newly_caught.any(dim=-1)
+
+        # DRONE-OVER-BOX fraction: is the drone horizontally inside the basket footprint (parked ON TOP)?
+        drone_bf = quat_rotate_inverse(base.basket_quat_w, drone_pos - base.basket_pos_w)
+        over_box = (drone_bf[:, 0].abs() < base.cfg.basket_half_x) & (drone_bf[:, 1].abs() < base.cfg.basket_half_y)
+        overbox_n += over_box.float().sum(); step_n += base.num_envs
 
         v_up = (hook_vel * wall_up).sum(-1)
         v_perp = (hook_vel * wall_normal).sum(-1)
@@ -248,6 +255,7 @@ def main():
         "swing_amp": round(swing_amp, 4),
         "jerk": round(jerk, 3) if jerk == jerk else None,
         "physicality_score": physicality,
+        "over_box_frac": round(float((overbox_n / step_n).item()) if step_n > 0 else 0.0, 4),
         # gates: task goal AND physically-correct behavior
         "GOAL_catch_0.30": catch_rate >= 0.30,
         "GOAL_hold_0.80": hold_gc >= 0.80,
