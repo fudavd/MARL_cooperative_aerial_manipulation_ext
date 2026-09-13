@@ -14,6 +14,7 @@ EXTENSION_TOML_DATA = toml.load(os.path.join(EXTENSION_PATH, "config", "extensio
 INSTALL_REQUIRES = [
     # NOTE: Add dependencies
     "psutil",
+    "rsl-rl-lib>=2.3.0",  # PPO backend for the hook-grasp task (scripts/hook_grasp)
 ]
 
 # Installation operation

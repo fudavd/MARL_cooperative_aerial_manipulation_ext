@@ -80,6 +80,13 @@ class IndiController:
             self.unfiltered_mot = torch.zeros((self.num_envs, 4), device=self.device)
             self.filtered_mot = torch.zeros((self.num_envs, 4), device=self.device)
 
+        # INDI disturbance residual (body frame, 6-dim): the external force/moment the drone MEASURES
+        # beyond its commanded control -- i.e. what the hook+wire imparts, sensed onboard (IMU) WITHOUT any
+        # hook/wall position. [ang(3): alpha_cmd - omega_dot (the INDI angular increment, line ~117);
+        # lin(3): R^T(acc_cmd - a_meas) (commanded vs measured specific force, rotated to body)]. Exposed
+        # here so the hook-grasp env can feed it to its hook-blind actor (onboard-measurable hook signal).
+        self.disturbance_residual = torch.zeros((self.num_envs, 6), device=self.device)
+
     def getCommand(
         self,
         state: dict,
@@ -102,6 +109,13 @@ class IndiController:
         omega_dot = quat_rotate(
             quat_inv(state["quat"]), state["ang_acc"]
         )  # body accelerations # normally from derivative filtered body rate
+        # INDI disturbance residual (body frame): angular = the INDI increment (alpha_cmd - omega_dot);
+        # linear = commanded minus measured specific force, rotated into the body frame. Carries the hook/wire
+        # external wrench (onboard-measurable, position-free) for the optional actor observation.
+        self.disturbance_residual = torch.cat(
+            (alpha_cmd - omega_dot, quat_rotate(quat_inv(state["quat"]), acc_cmd - state["lin_acc"])),
+            dim=-1,
+        )
         tau = torch.matmul(self.G_1, forces.transpose(0, 1)).transpose(0, 1)[:, 1:]  # torque commands
         mu = torch.zeros((self.num_envs, 4), device=self.device)
         collective_thrust_des_magntiude = torch.norm(acc_cmd, dim=1) * self.falcon_mass
@@ -174,4 +188,5 @@ class IndiController:
     def reset(self, env_ids):
         self.filterMot_.reset(env_ids)
         self.filterRate_.reset(env_ids)
+        self.disturbance_residual[env_ids] = 0.0
         # pass

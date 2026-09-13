@@ -29,6 +29,19 @@ Using ManagerBasedRLEnv, these task have been implemented (although deprecated),
 
 - `FlyThrough` Make the payload fly through a gap/between 2 walls, avoiding collisions.
 
+### Hook-grasp task (single drone, PPO)
+
+`Isaac-flycrane-hook-grasp-v0` (DirectMARLEnv with one agent): a drone carrying a flexible weighted wire + hook
+must swing the hook onto a bar on the wall of a basket and keep the wire taut. The actor is hook-blind (it only
+gets what the drone can measure onboard) and is trained with PPO (rsl_rl). See
+[`scripts/hook_grasp/README.md`](scripts/hook_grasp/README.md) for the task description and the train / eval /
+video workflow:
+
+```
+python scripts/hook_grasp/train.py --headless
+python scripts/hook_grasp/eval.py --headless --checkpoint logs/rsl_rl/hook_grasp/<run>/model_19999.pt
+```
+
 **I recommend not further developing the ManagerBasedRLEnvs, since centralized control can also be achieved by wrapping DirectMARLEnvs. They can be used for inspiration however.**
 
 Moreover, a test environment (without agent) for a single drone is also available in `single_falcon`.
@@ -42,6 +55,8 @@ Moreover, a test environment (without agent) for a single drone is also availabl
 cd skrl
 pip install -e .
 ```
+
+- For the hook-grasp task, install the PPO backend: `pip install rsl-rl-lib`
 
 - Using a python interpreter that has Isaac Lab installed, install the library
 
