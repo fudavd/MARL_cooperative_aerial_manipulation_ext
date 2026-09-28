@@ -50,6 +50,25 @@ cd exts/MARL_mav_carry_ext
 python -m pip install -e .
 ```
 
+## Follow-up projects (submodules)
+
+Two independent Isaac Lab extensions built on this work live in `projects/` as git submodules. Each registers
+its own gym environments, bundles the assets/controllers it needs, and installs next to `MARL_mav_carry_ext`.
+
+| submodule | package | gym ids | what |
+|---|---|---|---|
+| [`projects/flycrane-evo`](projects/flycrane-evo) | `flycrane_evo` | `Isaac-flycrane-evo-hovering-v0`, `Isaac-flycrane-evo-hovering-rand-v0` | evolved Hebbian plasticity (OpenAI-ES / CMA-ES) for the 3-drone transport task, with basket-weight + attachment-point randomization |
+| [`projects/flycrane-hook-grasp`](projects/flycrane-hook-grasp) | `flycrane_hook` | `Isaac-flycrane-hook-grasp-v0` | a single drone swings a wire + hook onto a basket wall bar and holds it (PPO, rsl_rl) |
+
+```bash
+git submodule update --init --recursive          # both track their `dev` branch
+cd projects/flycrane-evo && git lfs pull && python -m pip install -e . && cd -
+cd projects/flycrane-hook-grasp && git lfs pull && python -m pip install -e . && cd -
+```
+
+The complete development history before the split (all experiments, journals, scripts) is the tag
+`archive-pre-cleanup-2026-09-28`; both submodule repositories carry that history too.
+
 ## Assets
 
 The assets used for the tasks are under [exts/MARL_mav_carry_ext/MARL_mav_carry_ext/assets](https://github.com/Jackkert/MARL_mav_ext/tree/main/exts/MARL_mav_carry_ext/MARL_mav_carry_ext/assets).
@@ -122,23 +141,6 @@ To train the agent, for example using skrl. You can run the following command fr
 
 This will start the training for the hover task with the configured settings in the agent configuration file. For more command line interface arguments, check the respective `train.py` file under `scripts/`. To wrap the environment and allow for centralized training, simply change the algorithm to 'PPO'.
 
-
-### Hebbian / CMA-ES (evolutionary) training
-
-As an alternative to the gradient-based skrl agents, a Hebbian-plasticity policy optimized with
-CMA-ES is integrated from the [hebbian-marl](https://github.com/andresgr96/hebbian-marl) project
-(symlinked at `thirdparty/hebbian_marl`; an `agilerl`-free copy of the algorithm core is vendored
-in `MARL_mav_carry_ext.algorithms.hebbian`, so only the `cma` package is required). The plasticity
-rule (A/B/C/D) is evolved by CMA-ES while each network's weights adapt online — no backprop. Each
-parallel environment evaluates one CMA-ES candidate; the 3 drones share one plasticity rule.
-
-```
-python scripts/hebbian/train.py --task=Isaac-flycrane-payload-decentralized-hovering-v0 \
-    --headless --num_envs=90 --popsize=30 --n_repeats=3 --num_generations=100 --seed=1
-```
-
-A Hebbian-vs-MAPPO comparison harness (matched env-step budget, learning-curve overlay and eval
-metrics) lives in [`experiments/hebbian_vs_mappo/`](experiments/hebbian_vs_mappo/README.md).
 
 ### Playing
 To play with the learned agent, you can run the `play.py` script. This will load the latest checkpoint from the `logs` that have been accumulated during training. For this, execute (for example):

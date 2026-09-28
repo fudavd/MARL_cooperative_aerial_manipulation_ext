@@ -11,11 +11,7 @@ profile.sh
 *.db
 reference_trajectories/
 
-# --- session additions: environments, vendored deps, IDE, run outputs ---
+# local environment and vendored dependencies (IsaacLab 2.0.2 + skrl fork, installed editable)
 .venv/
-thirdparty/
 .idea/
-scripts/**/_render*/
-experiments/*.log
-experiments/hebbian_vs_mappo/
-experiments/hook_grasp_ppo/
+thirdparty/

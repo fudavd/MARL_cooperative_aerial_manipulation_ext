@@ -184,18 +184,6 @@ class MARLHoverEnvCfg(DirectMARLEnvCfg):
         "yaw": (-math.pi, math.pi),
     }
     range_curriculum_steps = 7500
-    # reward/task scheduling: when True, widen goal_range to the harder ranges after
-    # range_curriculum_steps control steps (see _reset_idx in marl_hover_env.py). Off by default.
-    range_curriculum: bool = False
-    # harder goal ranges activated once the curriculum kicks in
-    goal_range_hard = {
-        "pos_x": (-2.0, 2.0),
-        "pos_y": (-2.0, 2.0),
-        "pos_z": (0.5, 2.5),
-        "roll": (-math.pi / 4, math.pi / 4),
-        "pitch": (-math.pi / 4, math.pi / 4),
-        "yaw": (-math.pi, math.pi),
-    }
 
     make_quat_unique_command = False
     # goal_object_cfg: VisualizationMarkersCfg = VisualizationMarkersCfg(

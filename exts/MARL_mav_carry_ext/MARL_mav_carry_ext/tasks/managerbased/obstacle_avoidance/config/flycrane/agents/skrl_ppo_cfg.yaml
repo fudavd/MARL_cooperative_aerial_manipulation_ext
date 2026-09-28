@@ -5,6 +5,7 @@ seed: 42
 # https://skrl.readthedocs.io/en/latest/api/utils/model_instantiators.html
 models:
   separate: False
+  CTDE: False # the lab skrl fork reads this key for every agent config
   policy:  # see gaussian_model parameters
     class: GaussianMixin
     clip_actions: False

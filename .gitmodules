@@ -1,0 +1,8 @@
+[submodule "projects/flycrane-evo"]
+	path = projects/flycrane-evo
+	url = git@github.com:fudavd/flycrane-evo.git
+	branch = dev
+[submodule "projects/flycrane-hook-grasp"]
+	path = projects/flycrane-hook-grasp
+	url = git@github.com:fudavd/flycrane-hook-grasp.git
+	branch = dev
