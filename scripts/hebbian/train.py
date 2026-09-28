@@ -11,6 +11,11 @@ online via the Hebbian rule.  Each parallel IsaacLab environment evaluates one C
 Example:
     python scripts/hebbian/train.py --task=Isaac-flycrane-payload-decentralized-hovering-v0 \
         --headless --num_envs=90 --popsize=30 --n_repeats=3 --num_generations=100 --seed=42
+
+Any trailing `env.<dotted.path>=<value>` token overrides that field on the task cfg, matching the
+`scripts/skrl/train.py` (Hydra) convention -- so an env/reward/curriculum recipe tuned for one
+algorithm can be replayed verbatim here, e.g.
+    ... env.attachment.capture_radius=0.13 env.wall_pull_weight=0.0 env.attached_spawn_v0=0.4
 """
 
 import argparse
@@ -25,6 +30,48 @@ def str2bool(v):
     if isinstance(v, bool):
         return v
     return str(v).strip().lower() in ("1", "true", "yes", "y", "t")
+
+
+def _coerce(text: str):
+    """Parse an override value the way Hydra would: bool > None > int > float > str."""
+    low = text.strip().lower()
+    if low in ("true", "false"):
+        return low == "true"
+    if low in ("none", "null"):
+        return None
+    for cast in (int, float):
+        try:
+            return cast(text)
+        except ValueError:
+            pass
+    return text
+
+
+def apply_env_overrides(env_cfg, tokens):
+    """Apply `env.<dotted.path>=<value>` CLI tokens onto the task cfg.
+
+    Strict on purpose: an unknown field or a stray token raises instead of being dropped, because a
+    silently-ignored override would invalidate the experiment it was meant to define.
+    """
+    for tok in tokens:
+        if not tok.startswith("env.") or "=" not in tok:
+            raise SystemExit(
+                f"[ERROR] unrecognized argument: {tok!r} "
+                "(env overrides must look like env.<dotted.path>=<value>)"
+            )
+        path, _, raw = tok.partition("=")
+        parts = path.split(".")[1:]  # drop the leading 'env'
+        target = env_cfg
+        for p in parts[:-1]:
+            if not hasattr(target, p):
+                raise SystemExit(f"[ERROR] no such env config group: {path!r} (missing {p!r})")
+            target = getattr(target, p)
+        leaf = parts[-1]
+        if not hasattr(target, leaf):
+            raise SystemExit(f"[ERROR] no such env config field: {path!r}")
+        value = _coerce(raw)
+        setattr(target, leaf, value)
+        print(f"[INFO] env override: {path} = {value!r}")
 
 
 parser = argparse.ArgumentParser(description="Train a Hebbian/CMA-ES agent on a flycrane DirectMARL task.")
@@ -105,7 +152,7 @@ parser.add_argument("--exp_name", type=str, default="",
                          "<log_root>/<task>/<optimizer>/<timestamp>_seed<seed>/.")
 
 AppLauncher.add_app_launcher_args(parser)
-args_cli, _ = parser.parse_known_args()
+args_cli, env_override_args = parser.parse_known_args()
 sys.argv = [sys.argv[0]]
 
 app_launcher = AppLauncher(args_cli)
@@ -141,6 +188,11 @@ def main():
     env_cfg = parse_env_cfg(args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs)
     env_cfg.seed = args_cli.seed
 
+    # `env.<path>=<value>` CLI overrides (skrl/Hydra convention); applied before the obs-space
+    # recompute below so an overridden history_len stays consistent with observation_spaces.
+    if env_override_args:
+        apply_env_overrides(env_cfg, env_override_args)
+
     # observability / memory override (observation_spaces is computed at class-definition time,
     # so recompute it to match the requested partial_obs/history_len).
     # Some tasks (e.g. hook_grasp) declare a fixed per-frame obs layout via `obs_dim_per_frame` and a
@@ -151,10 +203,20 @@ def main():
         # honor an explicit --history_len (e.g. 1 = no memory -> obs_dim = obs_dim_per_frame); None keeps cfg
         if args_cli.history_len is not None:
             env_cfg.history_len = args_cli.history_len
-        obs_dim = env_cfg.obs_dim_per_frame * env_cfg.history_len
+        # Mirror the env's ACTOR layout exactly (marl_hook_env: _drone_obs_frame + _actor_hist), because the
+        # actor frame is NOT simply obs_dim_per_frame * history_len:
+        #   * actor_indi_residual appends the 6-dim body-frame INDI disturbance residual per frame, and
+        #   * actor_history_len (0 -> history_len) sets the ACTOR-only stack depth, decoupled from the critic.
+        # Getting this wrong builds the policy net to the wrong input size. Source of truth for the residual
+        # width: scripts/hook_grasp/rslrl_adapter.INDI_RESIDUAL_DIM.
+        _indi = bool(getattr(env_cfg, "actor_indi_residual", False))
+        per_frame = env_cfg.obs_dim_per_frame + (6 if _indi else 0)
+        actor_hist = int(getattr(env_cfg, "actor_history_len", 0)) or int(env_cfg.history_len)
+        obs_dim = per_frame * actor_hist
         env_cfg.observation_spaces = {a: obs_dim for a in env_cfg.possible_agents}
-        print(f"[INFO] task-defined obs: per_frame={env_cfg.obs_dim_per_frame}, "
-              f"history_len={env_cfg.history_len}, obs_dim={obs_dim}")
+        print(f"[INFO] task-defined obs: per_frame={per_frame}"
+              f"{f' (={env_cfg.obs_dim_per_frame} base + 6 INDI residual)' if _indi else ''}, "
+              f"actor_history_len={actor_hist}, obs_dim={obs_dim}")
     else:
         env_cfg.partial_obs = not args_cli.full_obs
         env_cfg.history_len = args_cli.history_len if args_cli.history_len is not None else 1

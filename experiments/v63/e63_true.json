@@ -1,0 +1,14 @@
+{
+  "arm": "true_hook(DIRECT)",
+  "checkpoint": "logs/rsl_rl/v63b_swing_true/2026-07-24_15-29-27_v63b_swing_true/model_4999.pt",
+  "num_envs": 256,
+  "steps": 2000,
+  "planarity": 0.9621,
+  "aim_deg": 2.03,
+  "whirl_sin": 0.269,
+  "lz_abs": 0.0734,
+  "swing_amp": 0.702,
+  "amp_along": 0.3203,
+  "amp_off": 0.0503,
+  "swing_frac": 0.9597
+}

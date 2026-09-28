@@ -107,10 +107,17 @@ class MARLHookGraspEnv(DirectMARLEnv):
         self._forces = torch.zeros(self.num_envs, len(self._falcon_rotor_idx), 3, device=self.device)
         self._moments = torch.zeros(self.num_envs, len(self._falcon_idx), 3, device=self.device)
         self._hook_force = torch.zeros(self.num_envs, len(self._hook_idx), 3, device=self.device)
+        self._drone_wall_force = torch.zeros(self.num_envs, len(self._falcon_idx), 3, device=self.device)  # solid-box collision on the drone base
         self._setpoints = {a: {} for a in self.cfg.possible_agents}
         self.prev_actions = {
             a: torch.zeros(self.num_envs, cfg.action_dim, device=self.device) for a in self.cfg.possible_agents
         }
+        # one step further back, for the 2nd-difference (action-accel / shakiness) penalty
+        self.prev_prev_actions = {
+            a: torch.zeros(self.num_envs, cfg.action_dim, device=self.device) for a in self.cfg.possible_agents
+        }
+        # previous-step drone speed (per drone) for the deceleration-event reward (v54 swing-by-stopping)
+        self._prev_drone_speed = torch.zeros(self.num_envs, self._num_drones, device=self.device)
 
         # --- drone state buffers ----------------------------------------------------------
         self.drone_positions = torch.zeros(self.num_envs, self._num_drones, 3, device=self.device)
@@ -202,7 +209,7 @@ class MARLHookGraspEnv(DirectMARLEnv):
                 "approach", "proximity", "impact_perp", "impact_up",
                 "catch", "success", "alive", "death", "lock", "tension", "wall_pull", "progress", "detach",
                 "action_smoothness", "body_rate_penalty", "force_penalty", "downwash", "swing_limit", "pump",
-                "swing_shape", "above_box",
+                "swing_shape", "above_box", "action_rate", "action_accel",
             ]
         }
         self.metrics = {
@@ -261,8 +268,9 @@ class MARLHookGraspEnv(DirectMARLEnv):
     # =====================================================================================
     def _pre_physics_step(self, actions: dict[str, torch.Tensor]) -> None:
         for agent in self.cfg.possible_agents:
-            self.prev_actions[agent][:] = self.actions[agent]
-            self.actions[agent][:] = actions[agent]
+            self.prev_prev_actions[agent][:] = self.prev_actions[agent]   # a_{t-2}
+            self.prev_actions[agent][:] = self.actions[agent]             # a_{t-1}
+            self.actions[agent][:] = actions[agent]                       # a_t
 
         for i, agent in enumerate(self.cfg.possible_agents):
             action = actions[agent]
@@ -323,7 +331,7 @@ class MARLHookGraspEnv(DirectMARLEnv):
         # Apply ALL external wrenches in ONE call (see _ext_body_ids note): body torques on the falcon,
         # thrusts on the rotors, PD-pin force on the hook. Order matches self._ext_body_ids.
         combined_forces = torch.cat(
-            (torch.zeros_like(self._moments), self._forces, self._hook_force), dim=1
+            (self._drone_wall_force, self._forces, self._hook_force), dim=1
         )
         combined_torques = torch.cat(
             (self._moments, torch.zeros_like(self._forces), torch.zeros_like(self._hook_force)), dim=1
@@ -350,8 +358,18 @@ class MARLHookGraspEnv(DirectMARLEnv):
         # world -> hook body frame
         force_b = quat_rotate_inverse(hook_quat.reshape(-1, 4), force_w.reshape(-1, 3)).view_as(force_w)
         self._hook_force[:] = force_b
+        # surrogate SOLID BOX for the DRONE (v55): keep the drone body OUT of the basket footprint so it cannot fly
+        # THROUGH the box; forces it to stay outside and aim the HOOK at the bar, not its own body (video feedback).
+        if getattr(self.cfg, "drone_wall_collision", False):
+            d_pos = self.robot.data.body_com_state_w[:, self._falcon_idx, :3] - self.scene.env_origins.unsqueeze(1)
+            d_vel = self.robot.data.body_com_state_w[:, self._falcon_idx, 7:10]
+            d_quat = self.robot.data.body_com_state_w[:, self._falcon_idx, 3:7]
+            dwall_w = self._wall_collision_force(d_pos, d_vel, extra_margin=self.cfg.drone_wall_margin)
+            self._drone_wall_force[:] = quat_rotate_inverse(d_quat.reshape(-1, 4), dwall_w.reshape(-1, 3)).view_as(dwall_w)
+        else:
+            self._drone_wall_force.zero_()
 
-    def _wall_collision_force(self, hook_pos_w: torch.Tensor, hook_vel_w: torch.Tensor) -> torch.Tensor:
+    def _wall_collision_force(self, hook_pos_w: torch.Tensor, hook_vel_w: torch.Tensor, extra_margin: float = 0.0) -> torch.Tensor:
         """Outward spring-damper that stops the hook penetrating the (visualization-only) basket walls.
 
         The 4 vertical walls form a footprint box of half-extents (hx, hy) spanning z in [0, wall_height];
@@ -364,8 +382,8 @@ class MARLHookGraspEnv(DirectMARLEnv):
         rel = (hook_pos_w - self.basket_pos_w.unsqueeze(1)).reshape(-1, 3)
         hook_bf = quat_rotate_inverse(q, rel)
         vel_bf = quat_rotate_inverse(q, hook_vel_w.reshape(-1, 3))
-        hx = self.cfg.basket_half_x + self.cfg.wall_collision_margin
-        hy = self.cfg.basket_half_y + self.cfg.wall_collision_margin
+        hx = self.cfg.basket_half_x + self.cfg.wall_collision_margin + extra_margin
+        hy = self.cfg.basket_half_y + self.cfg.wall_collision_margin + extra_margin
         H = self.cfg.basket_wall_height
         x, y, z = hook_bf[:, 0], hook_bf[:, 1], hook_bf[:, 2]
         inside = (x.abs() < hx) & (y.abs() < hy) & (z > 0.0) & (z < H)   # in the wall shell (top open)
@@ -560,7 +578,11 @@ class MARLHookGraspEnv(DirectMARLEnv):
         # Keeps the actor position-blind while giving it the hook DYNAMICS it needs to time the up-sweep.
         if getattr(self.cfg, "actor_indi_residual", False):
             parts.append(self._indi_residual[:, i])                 # 6
-        return torch.cat(parts, dim=-1)
+        # SCRUB non-finite values (fix for the NaN-std PPO crash, 2026-08-04): a wire-tension transient can spike
+        # the INDI residual (or a mid-divergence state) to Inf/NaN on the very step _get_dones resets the env --
+        # that frame still enters the rollout buffer and poisons the empirical normalizer + the PPO update. The
+        # critic state has had this scrub for weeks; the actor frame was the hole.
+        return torch.nan_to_num(torch.cat(parts, dim=-1), nan=0.0, posinf=0.0, neginf=0.0)
 
     def _get_states(self) -> torch.Tensor:
         # Centralized-critic state (CTDE): the actor obs is deliberately restricted to the hover-matching 45
@@ -640,6 +662,9 @@ class MARLHookGraspEnv(DirectMARLEnv):
         pump = torch.zeros(self.num_envs, device=self.device)
         swing_shape = torch.zeros(self.num_envs, device=self.device)
         above_box = torch.zeros(self.num_envs, device=self.device)
+        # v70 phase-gated smoothing: envs where any drone is in the near-wall UNATTACHED swing zone get the
+        # action-variability penalties turned OFF (the swing stroke must stay untaxed); set inside the loop.
+        smooth_free = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         for i in range(self._num_drones):
             drone_pos = self.drone_positions[:, i]
             hook_pos = self.hook_positions[:, i]
@@ -684,6 +709,10 @@ class MARLHookGraspEnv(DirectMARLEnv):
             # exp(-k*||hook-target||) concentrated at the target: the fine gradient that lifts the hook the last
             # bit onto the wall (centre) once the coarse approach has brought it close.
             proximity += self.cfg.proximity_weight * torch.exp(-self.cfg.proximity_k * hook_tgt) * not_att
+
+            # v70 phase gate: this drone in the near-wall unattached swing zone -> free the action penalties
+            if getattr(self.cfg, "action_smooth_phase_gate", False):
+                smooth_free |= (hook_tgt < self.cfg.smooth_free_zone) & (~attached)
 
             # --- impact / alignment: decompose hook velocity at the nearest wall (relative to the static wall) ---
             # Active ONLY inside the impact zone (hook within impact_range of the wall in 3D, still unattached).
@@ -734,6 +763,83 @@ class MARLHookGraspEnv(DirectMARLEnv):
             if self.cfg.swing_lateral_weight > 0.0:
                 # PENALIZE the sideways skim along the wall face (pivot-relative |v . bar_axis|).
                 swing_shape += -self.cfg.swing_lateral_weight * v_lat_rel.abs() * not_att
+            # DRONE-PIVOT PLANAR OSCILLATION (observable credit-assignment fix, 2026-07-22): reward the DRONE'S OWN
+            # velocity PERPENDICULAR to the wall (an in-plane pump the actor fully observes via its own state) and
+            # penalize its velocity ALONG the bar. Rationale: the hook-swing terms above shape an UNOBSERVED quantity
+            # (hook velocity) -> the policy adds energy isotropically (perp_ratio_rel stuck ~0.50). A planar-DRIVEN
+            # pendulum stays planar, so constraining the observable PIVOT to the wall-normal plane should carry the
+            # hook into a planar perpendicular arc without hook observation.
+            if self.cfg.drone_perp_osc_weight > 0.0 or self.cfg.drone_lat_penalty_weight > 0.0:
+                v_dr = self.drone_linear_velocities[:, i]
+                v_dr_perp = (v_dr * wall_normal).sum(-1)
+                v_dr_lat = (v_dr * bar_axis).sum(-1)
+                if self.cfg.drone_perp_osc_weight > 0.0:
+                    swing_shape += self.cfg.drone_perp_osc_weight * torch.clamp(v_dr_perp.abs(), max=self.cfg.drone_perp_osc_cap) * not_att
+                if self.cfg.drone_lat_penalty_weight > 0.0:
+                    swing_shape += -self.cfg.drone_lat_penalty_weight * v_dr_lat.abs() * not_att
+            # SWING-BY-STOPPING (2026-07-22): reward the drone for COMING TO REST near the wall (low own speed),
+            # unattached. Combined with the hook-swing terms (which reward the HOOK moving), the only way to satisfy
+            # both is to APPROACH with momentum then STOP -> inertia whips the hook into a pendulum swing. This
+            # rewards "approach + stop -> the swing falls out of the deceleration" and starves the "wobble in place"
+            # strategy (a wobbling drone never has low speed near the wall, so it earns nothing here).
+            if self.cfg.drone_stop_weight > 0.0:
+                near_wall = (hook_bar < self.cfg.drone_stop_radius).float()
+                drone_speed = torch.norm(self.drone_linear_velocities[:, i], dim=-1)
+                stopped = torch.exp(-(drone_speed / self.cfg.drone_stop_scale).square())   # ->1 as drone stills
+                # COUPLE with the hook SWINGING (v_swing = hook rel. to drone): reward "drone still WHILE hook swings"
+                # = a genuine pendulum. A static dead-hang (drone still AND hook still) has swing_active~0 -> earns
+                # NOTHING, so hovering-in-place cannot farm this term; only an approach->stop->swing does.
+                swing_active = torch.clamp(torch.norm(v_swing, dim=-1) / self.cfg.drone_stop_swing_ref, max=1.0)
+                # OUTSIDE-BOX gate (v54): only reward stopping when the DRONE is outside the basket footprint, so it
+                # learns to halt OUTSIDE and swing the hook IN (the positive gate requires the drone outside to catch),
+                # instead of parking OVER the box (over_box_frac was 0.44-0.56 in v52/v53 -> uncatchable).
+                if getattr(self.cfg, "drone_stop_outside_box", False):
+                    drone_bf_s = quat_rotate_inverse(self.basket_quat_w, drone_pos - self.basket_pos_w)
+                    outside = ((drone_bf_s[:, 0].abs() > self.cfg.basket_half_x)
+                               | (drone_bf_s[:, 1].abs() > self.cfg.basket_half_y)).float()
+                else:
+                    outside = torch.ones_like(near_wall)
+                swing_shape += self.cfg.drone_stop_weight * stopped * swing_active * near_wall * outside * not_att
+                # DECELERATION EVENT (v54): reward the ACTUAL braking maneuver (speed dropping) near the wall, not just
+                # the stopped state -> rewards "approach fast then brake" (which whips the hook), un-farmable by hover.
+                if self.cfg.drone_decel_weight > 0.0:
+                    decel = torch.clamp(self._prev_drone_speed[:, i] - drone_speed, min=0.0)   # positive when slowing
+                    swing_shape += self.cfg.drone_decel_weight * decel * swing_active * near_wall * outside * not_att
+                self._prev_drone_speed[:, i] = drone_speed
+            # --- v64 COMMANDED-PLANE swing block (transplanted from the v63 swing-test env, where this exact
+            # reward produced an AIMED PLANAR pendulum swing even hook-blind — aim ~1-2deg to the commanded axis,
+            # see experiments/v63/). The "command" here is the task geometry the actor already observes:
+            # u_hat = wall_normal (the perpendicular catch plane), w_hat = bar_axis (off-plane, suppressed).
+            # POSITIVE terms (amp, vel) are gated NEAR the wall (swing_plane_zone) so a far-field "swing in place"
+            # cannot be farmed (the v62 dead-hang/hover lesson); PENALTIES (off-plane disp/vel, |L_z| whirl) run
+            # over the whole unattached phase so the arriving swing is already planar. hook_tgt = dist to the
+            # reward target on the assigned wall (computed above for approach/proximity).
+            if self.cfg.swing_plane_amp_weight > 0.0 or self.cfg.swing_plane_whirl_weight > 0.0:
+                rel_sp = hook_pos - drone_pos                      # wire vector (pivot -> bob)
+                relh = rel_sp.clone(); relh[:, 2] = 0.0            # horizontal part
+                vh = v_swing.clone(); vh[:, 2] = 0.0
+                amp_along = (relh * wall_normal).sum(-1).abs()     # in-plane arc amplitude (wall-normal is horizontal)
+                amp_off = (relh * bar_axis).sum(-1).abs()          # off-plane displacement (along the bar)
+                vel_along = (v_swing * wall_normal).sum(-1).abs()  # in-plane swing speed
+                l_z = relh[:, 0] * vh[:, 1] - relh[:, 1] * vh[:, 0]  # azimuthal angular momentum (whirl)
+                in_zone_sp = (hook_tgt < self.cfg.swing_plane_zone).float() * not_att
+                # PENALTIES are clamped too (fix for the NaN-std crash, 2026-08-04): hook velocity spikes to
+                # enormous finite values in PhysX wire-tension transients; unbounded |v_lat| / |L_z| penalties
+                # then explode the advantage -> NaN gradients -> the policy's log_std goes NaN -> PPO dies with
+                # "normal expects all elements of std >= 0.0" (this ALSO was v64a's masked 4.2k silent death).
+                swing_shape += self.cfg.swing_plane_amp_weight * amp_along.clamp(max=self.cfg.swing_plane_amp_cap) * in_zone_sp
+                swing_shape += self.cfg.swing_plane_vel_weight * vel_along.clamp(max=self.cfg.swing_plane_vel_cap) * in_zone_sp
+                swing_shape += -self.cfg.swing_plane_off_weight * amp_off.clamp(max=1.0) * not_att
+                swing_shape += -self.cfg.swing_plane_vlat_weight * v_lat_rel.abs().clamp(max=3.0) * not_att
+                swing_shape += -self.cfg.swing_plane_whirl_weight * l_z.abs().clamp(max=2.0) * not_att
+            # STRAIGHT-WIRE swing shaping (see cfg.wire_straight_weight): penalize the chord-length deficit
+            # (wire bending) beyond the sag margin during the unattached phase -> forces a true straight-wire
+            # pendulum swing at the natural frequency instead of the high-frequency wire-whip exploit.
+            if getattr(self.cfg, "wire_straight_weight", 0.0) > 0.0:
+                chord_len = torch.norm(hook_pos - drone_pos, dim=-1)
+                deficit = (self._acfg.wire_length - self.cfg.wire_straight_margin - chord_len).clamp(min=0.0, max=0.5)
+                swing_shape += -self.cfg.wire_straight_weight * deficit * not_att
+
             # ARC AMPLITUDE: reward the hook's DISPLACEMENT from straight-below-the-drone, so the pendulum actually
             # arcs (not just a fast small wobble). disp = hook - drone anchor (the wire vector). PERPENDICULAR
             # displacement rewarded (big swing-out in the plane perpendicular to the wall), LATERAL penalized.
@@ -801,6 +907,13 @@ class MARLHookGraspEnv(DirectMARLEnv):
                 tension += -self.cfg.anti_sag_weight * torch.clamp(-v_drone_up, min=0.0) * attached.float()
             if self.cfg.slack_penalty_weight > 0.0:
                 tension += -self.cfg.slack_penalty_weight * torch.clamp(taut_thr - dist_da, min=0.0) * attached.float()
+            # PULL-AWAY transition shaping (see cfg.pull_away_weight): reward the radial move AWAY from the attach
+            # point while attached-and-slack -- shapes the catch->hold transition maneuver, not just the end state.
+            if getattr(self.cfg, "pull_away_weight", 0.0) > 0.0:
+                dvec = self.drone_positions[:, i] - self.attach_point_w[:, i]
+                v_away = (self.drone_linear_velocities[:, i] * (dvec / dist_da.clamp_min(1e-6).unsqueeze(-1))).sum(-1)
+                slackish = (dist_da < taut_thr + self.cfg.taut_margin_target).float() * attached.float()
+                tension += self.cfg.pull_away_weight * v_away.clamp(-1.0, 1.0) * slackish
             # --- anti-pull-to-wall: while attached, PENALIZE the drone moving INTO the wall (toward the anchor).
             # Pulling toward the wall both goes slack AND yanks the stiff pin -> unrealistic jerk on the drone.
             # Only the into-wall velocity component is penalized; holding still or pulling away is free. Gated to
@@ -882,6 +995,14 @@ class MARLHookGraspEnv(DirectMARLEnv):
         prev = torch.cat([self.prev_actions[a] for a in self.cfg.possible_agents], dim=-1)
         diff = ((cur - prev).abs()) / self._num_drones
         r_smooth = self.cfg.action_smoothness_weight * torch.exp(-torch.norm(diff, dim=-1).square()) * dt
+        # DIRECT action-variability PENALTIES (unbounded quadratic; bite harder the jerkier the commands).
+        prev_prev = torch.cat([self.prev_prev_actions[a] for a in self.cfg.possible_agents], dim=-1)
+        a_rate = (cur - prev) / self._num_drones                       # 1st diff: abrupt command changes
+        a_accel = (cur - 2.0 * prev + prev_prev) / self._num_drones    # 2nd diff: command shake/oscillation
+        # v70 phase gate: smoothing penalties OFF inside the near-wall unattached swing zone (see cfg)
+        smooth_gate = (~smooth_free).float() if getattr(self.cfg, "action_smooth_phase_gate", False) else 1.0
+        r_action_rate = -self.cfg.action_rate_penalty_weight * (a_rate * a_rate).sum(-1) * dt * smooth_gate
+        r_action_accel = -self.cfg.action_accel_penalty_weight * (a_accel * a_accel).sum(-1) * dt * smooth_gate
         body_rates = torch.cat([self.actions[a][:, 3:5] for a in self.cfg.possible_agents], dim=-1)
         r_body_rate = self.cfg.body_rate_penalty_weight * torch.exp(-torch.norm(body_rates / self._num_drones, dim=-1)) * dt
         eff = torch.max(self._forces[..., 2] / self.cfg.max_thrust_pp, dim=-1)[0]
@@ -896,6 +1017,7 @@ class MARLHookGraspEnv(DirectMARLEnv):
             "alive": r_alive, "death": r_death,
             "lock": r_lock, "tension": r_tension, "wall_pull": r_wall_pull, "progress": r_progress,
             "action_smoothness": r_smooth, "body_rate_penalty": r_body_rate, "force_penalty": r_effort,
+            "action_rate": r_action_rate, "action_accel": r_action_accel,
             "downwash": r_downwash, "swing_limit": r_swing_limit, "pump": r_pump,
             "swing_shape": r_swing_shape, "above_box": r_above_box,
         }
@@ -1029,7 +1151,9 @@ class MARLHookGraspEnv(DirectMARLEnv):
         for agent in self.cfg.possible_agents:
             self._observation_buffers[agent].reset(env_ids)
             self.prev_actions[agent][env_ids] = 0.0
+            self.prev_prev_actions[agent][env_ids] = 0.0
             self.actions[agent][env_ids] = 0.0
+        self._prev_drone_speed[env_ids] = 0.0
 
         if "log" not in self.extras:
             self.extras["log"] = dict()

@@ -1,0 +1,8 @@
+==================== RSL_RL LSTM ROLLOUT ====================
+ checkpoint        : experiments/best_checkpoints/v84r2_h3_mlp256_19999_catch0.90_hold0.97_HONESTr005_MLPONLY_NEWBEST.pt
+ steps / frames    : 2400 / 800
+ catches / detaches: 1 / 0
+ min hook<->bar (m): 0.016   (capture radius 0.05)
+ attached steps    : 1364 / 2400
+ success (held)    : False
+============================================================

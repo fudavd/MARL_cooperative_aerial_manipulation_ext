@@ -307,6 +307,23 @@ class HebbianTrainer:
         # tell the env which ES generation this rollout is (BEFORE reset, since reset samples the spawn std).
         # Mid-generation auto-resets during the rollout keep this same value -> one spawn std per generation.
         self.uenv._spawn_generation = self._generation_idx
+        # common random numbers (env cfg.crn): declare the job layout the env needs to share episode conditions
+        # across genomes -- env e runs job (genome e//n_repeats, repeat e%n_repeats), so scenario = e%n_repeats.
+        # Only valid because _start_generation assigns exactly one job per env in genome-major order below.
+        self.uenv._crn_repeats = int(self.cfg.n_repeats)
+        # draw the scenario table up-front rather than relying on the env's lazy refresh, so the table is in
+        # place before the reset below consumes it. Seeded by generation -> idempotent with that fallback.
+        if getattr(self.uenv.cfg, "crn", False) and hasattr(self.uenv, "_crn_refresh"):
+            # CRN assumes scenario == env_id % n_repeats, which only holds while every env keeps the ONE job it
+            # is given below. With num_envs < P*n_repeats the queue outlives the initial assignment and finished
+            # envs pick up further jobs, silently breaking that mapping (and the experiment) with no error.
+            if self.num_envs != self.total_jobs:
+                raise ValueError(
+                    f"crn=True requires num_envs == popsize * n_repeats "
+                    f"(got num_envs={self.num_envs}, popsize={P}, n_repeats={self.cfg.n_repeats} "
+                    f"-> {self.total_jobs} jobs)."
+                )
+            self.uenv._crn_refresh()
         self._generation_idx += 1
         # IMPORTANT: reset the whole sim so every genome assigned at the generation boundary
         # starts from a clean episode (otherwise idle envs would begin mid-episode and the

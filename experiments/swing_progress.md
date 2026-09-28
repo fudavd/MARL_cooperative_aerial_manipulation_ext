@@ -9,6 +9,475 @@
 
 ---
 
+# ✅ v63 BREAKTHROUGH → v64 GRASP RECIPE (2026-08-03) — READ FIRST
+
+**The clean swing-test env (Isaac-flycrane-swing-test-v0, no basket/catch/curriculum, commanded random azimuth)
+RESOLVED the "observability wall": the swing plane CAN be aimed even hook-blind.** v62 (first reward) collapsed to
+dead-hang (any farmable alive stream gets farmed); v63 fixed it with SEED-A-SWING (velocity kick at reset) + alive=0:
+
+| v63 arm | planarity | aim vs command | whirl | swing_amp |
+|---|---|---|---|---|
+| hook-blind | 0.78 | **0.55°** | 0.52 | 0.63 m |
+| observer (+3, deployable) | 0.85 | 1.66° | 0.45 | 0.60 m |
+| true hook (+3, privileged) | **0.96** | 2.03° | **0.27** | 0.70 m |
+
+**Decomposed verdict:** AIM is a *control/pivot* problem — solvable blind, given (a) the command axis in obs,
+(b) a reward that asks for planar amplitude along it, (c) a swinging start, (d) no hover farm. PLANARITY/whirl
+(Miles precession) is where hook info pays: blind 0.78 → observer 0.85 → true 0.96. The old perp_ratio 0.50
+"wall" was a degenerate metric + a reward that never asked the right question — NOT an information-theoretic floor.
+
+**✅✅ v64b RESULT (2026-08-03, OBSERVER arm, deterministic n=1053): NEW BEST — catch 0.498 / hold 0.947 @ the
+HONEST 0.05 m radius** (upsweep 73% @ v_up +0.37, jerk 20, deadhang 0.12). The +3-dim learned hook estimate beats
+blind by +13% relative catch (0.498 vs 0.440) — the info gain shows up as up-sweep TIMING precision, not swing
+shape (planarity 0.03 / aim 14° / amp 0.12 — same flick-like arc as blind). Both v64 arms clear catch≥0.30 AND
+hold≥0.80 at the true radius; the strict physical-arc gate (amp≥0.20, perp≥0.60) remains open, as does
+over_box 0.43. Ckpts + observer weights in experiments/best_checkpoints/ (v64b_planeobs_*BEST.pt). Videos
+(matplotlib scene MP4s — Isaac render is dead on BOTH machines: ALC segfaults, local hangs in kit init):
+experiments/v64_render/{v64a_blind_catch,v64b_observer_catch,...}.mp4 via eval_behavior --dump_traj +
+plot_grasp_traj.py.
+
+**✅ v64a RESULT (2026-08-03, blind arm, deterministic n=1034): BOTH GOALS CLEARED AT THE HONEST 0.05 m RADIUS
+FOR THE FIRST TIME — catch 0.440 / hold|caught 0.945** (previous honest best: catch 0.13). At 0.13: catch 0.609 /
+hold 0.930. Radius-sensitivity collapsed (−28% from 0.13→0.05 vs v46b's −60%) ⇒ the AIM fix is what lands swings
+in the 5 cm window: **aim_deg 5.4°** (was ~72°), upsweep 71% @ v_up +0.36 (genuine up-sweeps, chord gate active),
+jerk 18, deadhang 0.11. NOT yet met: the strict physical-arc score — planarity 0.043 / whirl 0.65 (aimed but still
+conical) and swing_amp 0.117 < 0.20; also over_box_frac 0.42 (loiters over the box between attempts). Ops notes:
+the original v64a died silently @4.2k (PhysX-style, no traceback) — resumed cleanly from model_4200 with a fast
+radius re-anneal; the observer arm's MLP DIVERGED on raw obs spikes (mse 0.16→4.0) — fixed with input clamp ±20 +
+inference output clamp 0.8 m + lr 3e-4 (mse now 0.012 falling), relaunched as v64b_plane_obs2.
+
+**v64 (launched 2026-08-03): transplant the v63 commanded-plane reward into the grasp task.** u_hat = assigned
+wall NORMAL, w_hat = bar axis; +amp/+vel gated near-wall (zone 0.7 m — no far-field swing farm), −off-plane
+disp/vel + −|L_z| whirl everywhere unattached (`swing_plane_*` cfg block). On top of the PROVEN stack: F3 recipe +
+INDI residual H3 + attached-spawn hold curriculum + swing-assist 2.2/gate 0.08 + above-box/downwash. Old failed
+shaping (swing_perp/arc/energy/pump/stop) left OFF. **Honest-radius anneal 0.13 → 0.05** over 150k (judge catch
+@0.05 — the real target; 0.13 was inflated). Arms: v64a blind (control) · v64b --hook_observer (v63 says it halves
+the whirl gap; deployable). 256 envs × 10k iters (peak window ~10k, don't overtrain), seed 42.
+
+---
+
+# 🎬 VIDEOS + RENDER FIX (2026-08-18): driver 595→580 restored Isaac RTX; both behaviours filmed
+
+Driver saga: the Aug-11 apt auto-upgrade (560.35→595.84-open) broke Isaac 4.5 RTX on the laptop (segfaults;
+ALC's 595.71 explains its long-standing render segfaults too). Ubuntu 24.04's 535/550 packages are
+transitional shells → 580; user installed **nvidia-driver-580 (580.173.02) — RTX rendering verified working**
+(bisect: 560✓ 580✓ 595✗). Real Isaac videos (fps 20, 40 s each):
+- **experiments/v84_video/v84r2_hooking.mp4** — r2 at honest gates: up-swing catch + 1364-step continuous
+  hold (hold-success termination disabled for filming).
+- **experiments/v86_video/v86_carry.mp4** — v86 carry: a FULL 2000-step episode, zero terminations,
+  pos_error mean 0.159 m, visibly tracking a tilted commanded pose (3 drones + cables + load).
+New: play_transport_video.py (RTX + --dump_traj fallback), plot_transport_traj.py (matplotlib 3D fallback).
+
+# 🎯 v86 RESULT (10000/10000 iters): PPO WEIGHT ADAPTATION WORKS — the attach policy learns to carry
+
+**wandb transport-ppo-handoff/k5xkxdif, finished. The hand-off that had NO channel for evolved head
+plasticity (v83/v85: crash in 0.4–0.6 s, flat landscape) trains cleanly under PPO:**
+- **Survival: median-61-step frozen r2 → mean episode length ~1330–1445 steps (13–14 s of the 20 s cap) in
+  the best rollout windows** (high window-to-window variance is rollout-bucket noise, not regression).
+- **Tracking: pos_error 0.82 → ~0.30 m, ori_error 1.77 → ~0.9 rad, per-step crash_term 0.003, episode
+  return 0.19 → ~30.**
+- Verdict on the user's question: gradient-based ALL-weights adaptation steers the attach behaviour into
+  cooperative carrying — the adaptation mechanism was never the blocker, the frozen-innate-behavior channel
+  was. NOT yet optimal: most episodes still end in a crash before 20 s and 0.30 m tracking is coarse vs the
+  dedicated hover policies (paper MAPPO / July Hebbian ~165-189 return regime).
+- Ckpt `best_checkpoints/v86_ppo_handoff_9999_...TRANSPORT.pt`. Open follow-ups: from-scratch PPO control
+  (same env, no warm start — does the attach init actually help?), longer training / termination curriculum
+  for the last mile, video of the carry behaviour.
+
+# 🎯 v86 PPO HAND-OFF FINETUNE (2026-08-15, launched): gradient weight adaptation from r2 on the transport task
+
+User direction after the v85 null: test whether PPO (all-weights gradient adaptation) can steer the attach
+behaviour into carrying, where evolved head plasticity had no channel. New
+`scripts/hook_grasp/train_rslrl_transport.py`: `TransportSharedAdapter` maps the 3-drone hover_rand hand-off
+env (identical to v83/v85 minus ES-only CRN/slots: 153-dim hook-layout obs + INDI residual, wall directive,
+deterministic horizontal spawn, per-env attachment DR, mass pinned) onto rsl_rl as ONE shared policy with
+each drone a batch lane (3E; rewards/dones env-shared and tiled; critic = the 84-dim global state tiled —
+value is env-level). **WARM START = r2's actor + action std + obs normalizer (verified tensor-equal at
+load); critic fresh** (r2's 180-dim hook critic state doesn't exist here). Feedforward ActorCritic [256,256].
+512 envs × 10k iters, wandb **transport-ppo-handoff/v86_ppo_handoff**. Watch Mean reward,
+Metrics/crash_term (↓ = surviving), Metrics/pos_error (↓ = carrying to the commanded pose).
+
+# 🧬 v85 RESULT (2026-08-14 12:05, 198 gens @ 20 h cap): NULL AGAIN — ABCD-only channel confirmed causally dead
+
+**wandb hebbian-transport-eshead/z6vfstw9: crash_frac 1.000 every generation, pair diffs ~3e-4 (u ~0.014 →
+no gradient), best_improvement 0.00035 = noise, theta ≈ 0.** 16× the envs (8192), sigma 0.1, ui 50, and the
+better r2 backbone changed nothing. Post-mortem diag: **r2 survives median 61 steps (0.61 s)** on the
+transport plant (v74: 38) — crash mix shifted to angle_limit_load 45% / drone_collision 35% — still far
+below ui=50, so the plastic head again gets ~1 update before death. **Three-run verdict (v82 hook, v83 v74,
+v85 r2+scale): ABCD-only last-layer plasticity has NO causal path to fitness when the frozen innate behavior
+dies before plasticity fires. The July-proven channel is the missing one: put the innate weights in the
+genome (ΔW block on the head, +1280 → genome 6400) so ES can shape behavior at t=0 — and/or a termination
+curriculum so episodes outlive the update interval.**
+
+# 🧬 v85 HAND-OFF RETRY WITH r2 BACKBONE (2026-08-13, launched): ABCD head-plasticity at July ES scale
+
+User direction: v83 rerun with the r2 MLP backbone (v84 winner, catch 0.904/hold 0.970) + the July
+working-run OpenAI-ES scale: **pop 1024 × 8 repeats = 8192 envs** (July hover_rand_dr proven), sigma 0.1,
+ui 50, hlr 0.05, genome = ABCD of the 256→5 head = **5120** (unchanged — head shape identical to v74's).
+v82 honest instrument retained (raw pair diffs u_scale 0.02, SGD lr 0.001, theta anchor, revert, baseline +
+center slots, CRN goals + pair-matched attachments). evolve_head_transport.py now auto-detects feedforward
+vs LSTM checkpoints. **Smoke signal: r2 crash 0.875→0.50 in 100 steps — NOT the v83 wall-to-wall 1.0; the
+MLP attach policy already survives the transport plant longer than v74 did.** ALC experiments/v85_handoff_r2/,
+wandb hebbian-transport-eshead, 200 gens / 20 h cap.
+
+# 📉 v84 GRID COMPLETE (2026-08-12 06:39): LSTM unnecessary — MLP-only H3 is the NEW CAMPAIGN BEST; floor found
+
+| run | H | mem | hidden | actor weights | catch | hold\|caught | verdict |
+|---|---|---|---|---|---|---|---|
+| v74 baseline | 3 | LSTM | 256 | 551k | 0.787 | 0.923 | old best |
+| r1_h1_lstm256 | 1 | LSTM | 256 | 447k | 0.750 | 0.856 | ✓ both goals |
+| **r2_h3_mlp256** | 3 | — | 256 | **106k** | **0.904** | **0.970** | **✓✓ NEW BEST** (jerk 12.96) |
+| r3_h1_mlp256 | 1 | — | 256 | 80k | 0.607 | 0.917 | ✓ (jerk 7.48, calmest ever) |
+| r4_h3_mlp128 | 3 | — | 128 | **37k** | 0.616 | 0.934 | ✓ smallest viable (ABCD 146k) |
+| r5_h1_mlp128 | 1 | — | 128 | 24k | 0.000 | — | ✗ deadhang collapse (0.66) |
+| r6_h1_mlp64 | 1 | — | 64 | 7.7k | 0.005 | — | ✗ deadhang collapse (0.44) |
+
+**Findings (single-seed each — replicate before hard claims):**
+1. **The LSTM was never needed and actually hurt**: r2 (H3 frame-stack, plain MLP-256) beats v74 on every
+   headline metric — catch 0.904 / hold 0.970 / upsweep 0.996 / jerk 12.96. New campaign best;
+   ckpt `best_checkpoints/v84r2_...NEWBEST.pt` (2.6 MB vs v74's 13.6 MB).
+2. **The H3 frame-stack is the load-bearing memory**: at every capacity H3 ≫ H1 (0.904→0.607 @256;
+   0.616→collapse @128). History cannot be cut to 1 frame without cost; capacity interacts — H1 needs 256.
+3. **Capacity floor: 128 hidden with H3** (r4: 0.616/0.934, 37k weights). Below that (H1+128, H1+64) the
+   policy collapses to deadhang. Untested: H3+64 — plausible next point if a smaller genome is needed.
+4. **For the hand-off genome**: r2 → ABCD 424k (quality-first); r4 → ABCD 146k / ABCD+W 183k (size-first,
+   still clears both goals with margin). vs v74's 2.2 M. wandb: hook-grasp-arch-grid (6 runs).
+
+# 📉 v84 ARCHITECTURE-REDUCTION GRID (2026-08-11, launched): how small can a v74-quality attach policy get?
+
+Motivation: all-weights plasticity on v74 needs a 2.2 M ABCD genome (LSTM alone = 76%). If a smaller net
+still solves hook-grasp, the hand-off genome becomes tractable. Grid over three reduction axes (history
+H3→H1, LSTM→MLP-only via new `--feedforward` flag, hidden 256→128→64), each trained with the EXACT v74
+recipe (512 envs × 20k iters, seed 42, INDI residual, 300 g) + honest eval (0.05/25°) after each:
+| run | H | memory | hidden | actor-path weights (ABCD genome ×4) |
+| v74 baseline | 3 | LSTM256 | 256 | 551,168 (2.20 M) — catch 0.787 / hold 0.923 |
+| r1_h1_lstm256 | 1 | LSTM256 | 256 | 446,720 (1.79 M) |
+| r2_h3_mlp256 | 3 | — | 256 | 105,984 (424 k) |
+| r3_h1_mlp256 | 1 | — | 256 | 79,872 (319 k) |
+| r4_h3_mlp128 | 3 | — | 128 | 36,608 (146 k) |
+| r5_h1_mlp128 | 1 | — | 128 | 23,552 (94 k) |
+| r6_h1_mlp64 | 1 | — | 64 | 7,680 (31 k — July-ES scale) |
+**r2_h3_mlp256 RESULT (first grid point, 2026-08-11 19:18): the LSTM is NOT needed — MLP-only BEATS the v74
+baseline: catch 0.904 / hold 0.970 honest** (vs 0.787/0.923), upsweep 0.996, jerk 12.96 (best of campaign),
+deadhang 0.028, over_box 0.115. The H3 frame-stack alone carries the needed short-term dynamics. Actor path
+551k → 106k (ABCD genome 2.2 M → 424 k) with a performance GAIN.
+
+**r1_h1_lstm256 RESULT (19:36): H1 with LSTM still clears both goals but costs performance — catch 0.750 /
+hold 0.856** (vs v74 H3-LSTM 0.787/0.923): shrinking history hurts where dropping the LSTM helped.
+
+Framework additions: `make_runner_cfg(feedforward=)` selects plain ActorCritic (rnn keys dropped) +
+`hidden_dim` pseudo-key expands to [n,n]; `--feedforward` on train_rslrl + eval_behavior (must match at
+load). Chain `run_archgrid.sh` on ALC: 2 lanes × 3 runs (2 concurrent max — 3×512 envs breaks paging),
+results append to experiments/archgrid_results.txt, wandb project **hook-grasp-arch-grid**. ~1.5–2 days.
+
+# 🚁 v83 RESULT (2026-08-10 23:44, 300/300 gens): NULL — plasticity never gets to act; v74 dies in 0.4 s
+
+**Completed clean (wandb hebbian-transport-eshead/2zf9sd5d, ~5 h): crash_frac 1.000 every generation,
+diff_abs_mean ~7e-5 (pair differences literally zero), improvement never left noise (best 0.001), theta ≈ 0.**
+The landscape around the transplanted policy is perfectly flat — σ=0.05 head plasticity does not change when
+or how it crashes.
+
+**Post-mortem diagnostic (diag_handoff.py, 32 envs, 939 episodes): pure v74 survives a MEDIAN of 38 control
+steps (0.38 s) on the transport plant.** Death causes: cable-angle-vs-drone limit 55%, cable-angle-vs-load
+24%, drone collision 14%, cable collision 6%. Mechanism: v74's core competence — pumping the wire to big
+swing angles — is precisely what the taut-cable carry task terminates on. And with update_interval=25, the
+Hebbian head gets ~ONE update before death: "online adaptation" has no time to exist, so evolution has
+nothing to shape. The null is structural, not a tuning miss.
+
+**Levers if pursued (user's call):** (1) termination curriculum — widen cable-angle/collision limits early so
+episodes live long enough for plasticity to matter; (2) evolve the initial head weights too (static shift
+toward calm, not just ABCD); (3) faster plasticity (ui 25→5) so it can act within 40 steps; (4) drop ES —
+PPO-finetune from v74 on the carry task (the dense-reward, big-domain-gap regime is PPO's home turf, cf.
+v79-v82: every ES attempt on this stack has lost to PPO).
+
+# 🚁 v83 ATTACH→TRANSPORT HAND-OFF (2026-08-10, launched): v74 policy ×3 drones + evolved head plasticity
+
+User direction: run the v74 attach policy on ALL THREE drones of the transport env (hover_rand, "as if the
+drones just did the attachment one by one") and evolve Hebbian ABCD on its last layer (v82 instrument) so
+online plasticity adapts attach→carry. New `scripts/hebbian/evolve_head_transport.py` + hover_rand env flags:
+- **Obs match by design**: hook env's 45-frame was built to mirror the hover partial layout, and both replace
+  the ego one-hot with the wall-centre directive (same `R_load @ c_load` convention). Added
+  `actor_indi_residual` cfg flag to hover_rand (appends the 6-dim INDI residual per frame, 45→51, ×H3 = 153 =
+  the exact v74 actor input). v74 loaded directly via ActorCriticRecurrent + EmpiricalNormalization
+  (ckpt keys: model_state_dict + obs_norm_state_dict), frozen; 3 drones = agent-major batch 3E through one
+  shared LSTM (per-drone hidden state + per-drone plastic head w, reset to W0 on episode reset).
+- **Conditions matched for the instrument**: goal poses CRN'd per scenario (new `crn` flag, env % n_repeats,
+  redrawn per generation); per-env attachment DR condition-slot-matched (`attachment_condition_slots`) so
+  antithetic pair members AND the baseline/center slots get identical attachment draws; spawn deterministic
+  horizontal (roll/pitch/yaw 0, z offset 1.0); basket mass pinned 1.4 kg (un-CRN'd DR would pollute pair diffs).
+- **Rescaled v82 instrument**: hover reward is ~100× smaller than hook (~0.01–0.05/step) → u_scale 0.02,
+  revert_margin 0.02 (v82's 0.5 values would zero every gradient).
+- **Smoke result**: pipeline clean (impr=0.0000 at theta=0 exactly), but **pure v74 crashes early in 100% of
+  envs** — the attach→carry domain gap is the experiment; dense tracking reward gives ES a survive-longer
+  gradient. Run: ALC `experiments/v83_handoff/`, pop 256×2 = 512 envs, 300 gens, wandb hebbian-transport-eshead.
+
+# 🧬 v82 ES-HEAD RETRY, HONEST INSTRUMENT (2026-08-10): fix works, verdict = plasticity adds NOTHING (~0.00)
+
+v82 = v81 rerun with the two fixes (user-directed): (1) gradient from RAW baseline-subtracted antithetic pair
+differences on a fixed scale (u=clip(Δf/0.5,±3), plain SGD — replaces centered ranks + Adam, which are
+offset/scale-invariant and turned no-signal gens into full-size steps), (2) theta anchor 1%/gen toward 0 + trust
+region (revert to best theta after 10 straight gens of improvement < −0.5). Two reserved population slots per gen
+under identical CRN conditions: genome=0 (pure PPO) and unperturbed theta → `improvement = fit_center − fit_base`
+is the honest metric. Run: ALC `experiments/v82_eshead_rel/eshead_..._15-04-41`, wandb
+**hook-grasp-es-head/p8orhzyl**, 300/300 gens completed 18:07.
+
+**Results:**
+- **The optimizer pathology is gone**: theta_norm stayed ~0.05 the whole run (v81: drifted to 25), 0 reverts,
+  center tracked base throughout. The fix did exactly what it was designed to do.
+- **But the honest signal is ZERO: improvement = +0.002 ± 0.049 over 300 gens (SEM 0.003, frac>0 = 0.53)** —
+  Hebbian head plasticity adds nothing over the plain PPO head. best_improvement 0.186 @gen 16 is a noise draw.
+  diff_abs_mean ~0.02/step = pair differences at noise level: the fitness landscape around theta=0 is FLAT at
+  sigma 0.05 — there is no direction in which plasticity helps.
+- **Retroactive v81 correction**: v82's fit_base (pure PPO) itself fell 4.2 → 0.2/step over generations — that's
+  the generation-driven curriculum hardening (radius 0.13→0.05, chord gate annealing, attached-spawn income
+  declining), NOT policy damage. So most of v81's "collapse" I attributed to theta drift was actually the task
+  getting harder under every genome; v81's real defect (unmeasured drift to norm 25 with no baseline to compare
+  against) is exactly what v82's instrument fixes.
+
+**Campaign verdict on the ES line (4 attempts: v79 CMA-ES, v80 July-scheme OpenAI-ES, v81, v82): closed.**
+From-scratch ES can't reach the gated catch; plasticity-on-pretrained measures ~0.00 benefit with an honest
+baseline-subtracted instrument. PPO v74 (catch 0.787 / hold 0.923 honest, hook-blind) stands as the solution.
+
+# 🧬 v81 ES-HEBBIAN HEAD ON FROZEN PPO BACKBONE (2026-08-10): completed 300/300 gens — NEGATIVE
+
+The third ES attempt (`scripts/hook_grasp/evolve_head.py`, run `experiments/v81_eshead/eshead_p256_s0.05_hlr0.05_ui25_seed42_2026-08-10_11-39-16` on ALC, wandb **hook-grasp-es-head/clil5s2t**, finished cleanly 14:43): freeze the v74 backbone (normalizer+LSTM+MLP hidden), evolve only the ABCD Hebbian plasticity coefficients of the 5×256 action head (genome 5120, theta=0 ⇒ head stays at the PPO weights W0; online rule dw=A·post⊗pre+B·pre+C·post+D, elastic anchor 0.01 to W0, |Δw|≤0.5). OpenAI-ES pop 256×2 repeats, sigma 0.05, Adam lr 0.02, CRN, fitness = per-step mean reward over 2000 steps.
+
+**Result: evolution strictly degraded the pretrained policy and never recovered.**
+- Gen 0–2 (theta≈0 = plain PPO ± tiny plasticity): fit_mean 4.2–7.4, attached_frac 0.5–1.0 — the backbone works.
+- By gen ~28 the population is permanently broken: fit_mean ~0.15–0.3, attached_frac 0.03–0.2, and **no generation after gen 28 ever beat fit_best 1.1** (gen-275 best: 0.29). fit_best_so_far 7.39 was set at gen 1 and never touched again.
+- theta_norm grew monotonically ~+0.08/gen to 25.0 at gen 299 — Adam integrated a noise-dominated rank gradient into a steady drift away from theta=0; the anchor keeps w near W0 *within* an episode but nothing anchors *theta*, so the plasticity rule itself walked into a regime that actively destroys the hold/catch behavior every episode.
+- The big gen-to-gen fitness oscillation early on (7.4 / 0.3 / 3.7 / 0.3 …) tracks attached_frac (1.0 / 0.02 / 0.5 …) — it's the CRN spawn condition changing per generation, not genome quality; that bimodal fitness noise is exactly what swamped the ES gradient.
+
+**Verdict: the best genome found is theta≈0, i.e. "don't touch the PPO head."** Hebbian head-plasticity on this task, evolved with per-step-reward fitness, is net harmful — consistent with v79/v80: no ES variant tried (from-scratch CMA-ES, from-scratch July-scheme OpenAI-ES, plasticity-on-pretrained) has added anything over PPO v74 (0.787/0.923). If this direction is ever retried, the fixes suggested by the failure mode are: fitness = *improvement over the theta=0 baseline under identical CRN conditions* (baseline-subtracted, kills the spawn-condition noise), and/or anchor/trust-region on theta itself.
+
+# 🧬 EVOLUTION vs PPO ON THE HONEST TASK (2026-08-08/09): both ES attempts FAIL — catch 0.0
+
+Two evolutionary runs of the FINAL task (honest 0.05 radius annealed, 25° outside chord gate annealed, v74
+reward stack, 300 g, hook-blind + INDI residual), honest-evaluated with the patched eval_hebbian (gates pinned,
+chord curriculum disabled — no July radius-mismatch):
+- **v79 CMA-ES** (my first attempt; pop 48, latent 4, hist 3, fitness=return, 400 gens): fitness 53→94 but ALL
+  of it curriculum income (attached-spawn holds + proximity/alive) — honest catch 0.0, and mean episode 122
+  steps = can't even sustain from-scratch flight. wandb hebbian-hook-grasp/v9flfmlq.
+- **v80 OpenAI-ES = the July es_f3_crn_indi controller scheme** (pop 1024×8=8192 envs, latent 8,
+  evolve_init_weights+keep_d, hebbian_lr 0.05 @ ui100, hist 1 + INDI = 51-dim, fitness=mean_reward, CRN) united
+  with the current task/reward findings; 512 gens / 20 h: pop mean NEVER left ~0/step, best-so-far flat from
+  gen ~70. Honest: catch 0.0 / attached 0.0 — but STABLE FLIGHT (mean episode ~1920/2000). It evolved
+  hover/approach, never the swing-catch. wandb hook-grasp-es-f3/woqd6wkf (beside the July baselines).
+**Conclusion: the physically-gated catch is out of reach for both ES variants at these budgets** — the July ES
+0.11 catch lived off the gateless 0.13-radius task. The sparse 25°-gated catch gives ES no fitness gradient
+(PPO's critic + dense advantage does). PPO-LSTM (v74: 0.787/0.923) stands as the solution; ES would need a
+staged fitness (flight→approach→swing→catch) or a pretrained backbone to compete.
+
+# 📐 HOOK-MASS CURVE COMPLETE (2026-08-07): 250 g = the sweet spot; goals met from 200 g up
+
+All points = the BLIND v74 recipe (no observer, wall_pull 8) @ 512×20k s42, each trained AND evaluated at its
+own mass (hook_mass_kg cfg → startup event), honest 0.05 + 25° outside gate:
+
+| bob mass | 50 g | 100 g | 150 g | 200 g | **250 g** | 300 g |
+|---|---|---|---|---|---|---|
+| catch (goal .30) | 0.024 | 0.271 | 0.497 | 0.604 ✓ | **0.792 ✓** | 0.787 ✓ |
+| hold\|caught (goal .80) | 0.333 | 0.388 | 0.540 | 0.818 ✓ | **0.940 ✓** | 0.923 ✓ |
+
+- **Performance saturates at ~250 g** (250 ≈ 300 within noise; 250 nominally best on both metrics).
+- **HOLD has a knee between 150→200 g** (0.54 → 0.82): the bar-seating tension cliff. Catch climbs smoothly.
+- Up-sweep% stays ~99-100% at EVERY mass — the swing behavior is mass-independent; conversion + retention are not.
+- 50 g straight-wire variant (v77) fixed the wire-whip (planarity 0.75) but NOT the catch (0.001) — light-bob
+  failure is momentum/tension, not the whip (whip was a symptom).
+- **HARDWARE SPEC: 200 g = minimum viable, 250 g = optimal** (max performance, lightest at the plateau).
+Ckpts: v78c_m250 (MASSOPT) + v74 (300 g) in experiments/best_checkpoints/.
+
+# 🎓 FINAL ABLATIONS (2026-08-06): the HOOK-BLIND actor is the true final recipe; light hook FAILS
+
+| honest 0.05 + 25° gate, 512×20k s42 | v73 (observer, 300g) | **v74 (BLIND, 300g)** | v75 (observer, 50g) |
+|---|---|---|---|
+| catch | 0.776 | **0.787** | 0.024 |
+| hold\|caught | 0.936 | 0.923 | 0.333 |
+| att_speed / slack | 0.56 / 0.14% | **0.47** / 0.16% | 0.63 / — |
+| upsweep / aim | 99.5% / 1.6° | 99.6% / 1.5° | 100% / 2.0° |
+
+**(1) The hook OBSERVER is UNNECESSARY** — the fully hook-blind actor (153-dim, IMU/INDI residual only, the
+project's ORIGINAL hard constraint) matches v73 and holds calmest. The July "observability wall" was a
+reward-design + training-scale limit, never an information limit. Deployable with onboard sensing only.
+**(2) The 50 g hook COLLAPSES catch (0.024)** under the modern gates — its swing is beautifully planar
+(planarity 0.78, aim 2°, amp 0.148 — best shape of the campaign!) but the light bob lacks the momentum to
+convert swings into 25°-gated catches at 5 cm (and its INDI signature is 6× weaker). The July "50 g made catch
+learnable" finding belonged to the gateless 0.13-radius era; with physical gates the HEAVY bob is an asset.
+**FINAL RECIPE = v74**: the v73 env_kv @ 512×20k, --indi_residual H3, NO observer, 300 g hook. Ckpt:
+best_checkpoints/v74_noobs_blind..._HOOKBLIND_FINAL.pt.
+
+# 🏁 v73 = FINAL RECIPE (2026-08-05): wall_pull restored — best everything, calmest holds
+
+**v73 = v71 + wall_pull_weight 8 (the attached-phase into-wall-velocity penalty F3 had zeroed; user's
+"rocking makes the wire slack" fix), 512×20k s42, honest 0.05 + 25° gate:**
+catch **0.776** · hold **0.936** · jerk **15.5** (campaign best; v28's creeper was 103) · att_speed 0.74→**0.56**
+· slack_frac **0.0014** · upsweep 99.5% · planarity 0.69 · aim 1.6° · over_box 0.164 · swing_amp 0.136.
+Every metric ≥ v71; the single restored knob was free performance. Ckpt:
+best_checkpoints/v73_wallpull...FINAL.pt (+observer in experiments/v73/). Video: experiments/v73/v73_attempts.mp4.
+Residual polish (not blocking): att_speed 0.56 = holds still station-keep dynamically in the lateral pose;
+swing_amp 0.136 < the 0.20 strict-arc bar (directed flick-swing, not a large arc).
+
+# 🏆🏆 SEED-CONFIRMED (2026-08-05): v71 recipe meets both goals on BOTH seeds
+
+| honest 0.05 + 25° gate | seed 42 | seed 7 | goal |
+|---|---|---|---|
+| catch | 0.708 | **0.841** | ≥0.30 ✅✅ |
+| hold\|caught | 0.897 | **0.962** | ≥0.80 ✅✅ |
+| upsweep | 99.5% | 99.8% | genuine |
+| slack_frac (attached) | (rescoring) | 0.0013 | wire ~never slack |
+| att_speed | (rescoring) | 0.65 m/s | still moving during holds (the visible "rocking") |
+
+Seed-7 ran into the rare C-level sim death @17.4k, resumed cleanly from ckpt → 20k (curricula pinned). Both
+ckpts in experiments/best_checkpoints/ (v71_*GOALSMET.pt, v71s7_*GOALSMET.pt). Remaining polish: att_speed
+0.65 (hold is dynamic, not a still taut hover) — v73 (= v71 + wall_pull_weight 8, the into-wall-velocity
+penalty F3 had zeroed) targets exactly this; new eval metrics slack_frac/att_speed track it.
+
+# 🏆 v71 (2026-08-05): BOTH GOALS MET AT THE HONEST RADIUS — SCALE WAS THE MISSING LEVER
+
+**v71 = the v70a phase-gated recipe at 512 envs × 20k iters (curricula rescaled 300k/120k), seed 42.
+Deterministic eval @ TRUE 0.05 m + 25° outside chord gate + z_hi 0.22, n=1025 episodes:**
+| metric | v71 | goal |
+|---|---|---|
+| **catch** | **0.708** | ≥0.30 ✅ (2.4×) |
+| **hold\|caught @100** | **0.897** | ≥0.80 ✅ |
+| upsweep / v_up | 99.5% / +0.95 | genuine energetic J-hook up-sweeps |
+| perp_ratio_rel / planarity / aim | 0.678 / 0.735 / 1.16° | ≥0.60 ✓ — directed PLANAR swing |
+| deadhang / jerk / over_box | 0.016 / 21.8 / 0.223 | clean |
+Training af rose to the very END (0.086 @20k, no peak-collapse — unlike the old 10k-peak task) ⇒ possibly still
+undertrained. Only strict-arc criteria unmet: swing_amp 0.125 (<0.20) + world-frame perp 0.574 — the catch is a
+small DIRECTED planar flick-swing, not a large arc. Caveats: single seed (replicate v71_s7 RUNNING), over_box
+0.22 slightly above v70a. Ckpt: experiments/best_checkpoints/v71_scale512x20k_..._GOALSMET.pt (+observer).
+v72 (v70a + pull_away transition reward, 256×10k) finishing — candidate to stack for hold margin.
+**Lesson: after v63→v70 fixed the BEHAVIOR (aim/planarity/outside-catch), the remaining catch gap was pure
+TRAINING SCALE — reward design was already sufficient at v70a.**
+- v72 (v70a + pull_away transition reward 6.0, 256×10k s42): catch 0.155 / hold 0.544 — **tested-negative**
+  (no hold gain over the v70a band; the cfg term stays available but default-off). Scale, not another reward,
+  was the hold fix too. FINAL RECIPE = v70a env config @ 512 envs × 20k ("v71"). Replicate v71_s7 pending.
+
+# 📊 v70a 3-SEED BAND (2026-08-05): the STABLE physically-honest frontier; v71 scale test RUNNING
+
+**v70a (v69c + PHASE-GATED smoothing: penalties OFF in the near-wall unattached swing zone) is the first recipe
+CONSISTENT across seeds** — {s42, s7, s123} @ honest 0.05 + strict gates:
+catch {0.167, 0.169, 0.119} · hold {0.665, 0.594, 0.573} · aim {0.9°, 0.7°, 0.2°} · planarity ~0.6 ·
+upsweep ~100% · over_box ~0.18. ⇒ **Honest reproducible frontier: catch ~0.15, hold ~0.61.** The phase gate
+recovered v65b catch while keeping a hold edge; behavior metrics reproduce every seed. NB the v69c s42
+hold=0.879 did NOT replicate (s7: 0.53) — that was seed luck; only the v70a band is trustworthy.
+**Goals (0.30/0.80) remain ~2x/+0.2 away CONSISTENTLY → reward tuning is exhausted; different lever needed.**
+Options: scale (v71 = v70a @ 512 envs x 20k, RUNNING ~5h, curricula rescaled 300k/120k) · task-level help
+(wider bar / bar-height curriculum — user decision) · accept & document the frontier.
+
+# ✅ v69c (2026-08-05): the user's SMOOTHING/anti-wobble shaping MET THE HOLD GOAL (single-variable proof)
+
+| honest r=0.05, strict gates | v65b (base) | **v69c = v65b + smoothing only** | v69a = + dyn-hold only |
+|---|---|---|---|
+| catch | 0.166 | 0.097 | 0.058 |
+| hold\|caught | 0.54 | **0.879 ✓ GOAL MET** | 0.63 |
+| jerk / over_box | 27.1 / 0.147 | **22.1 / 0.088** | 29.3 / 0.146 |
+
+Smoothing = action_rate/accel 0.15 + drone_perp_osc 2.0. Mechanism: calm control -> taut wire -> no slack-detach
+(hold), but the penalties tax the energetic near-wall swing stroke (catch −40%). dyn-hold v0 0.6 = net negative,
+DROPPED. v67/v68 bundling mistake documented below (confounded arms, user called it out — single-variable rule).
+NaN-std PPO crashes (v64a/v67/v68a) fully fixed: penalty clamps + actor-obs scrub + adapter obs/reward bounding.
+**v70 RUNNING: a = v69c + PHASE-GATED smoothing (penalties OFF in the near-wall unattached swing zone — cfg
+action_smooth_phase_gate/smooth_free_zone; aims to recover v65b catch while keeping v69c hold) · b = v69c seed-7
+replicate (all comparisons so far are single-seed-42; historical seed spread was 0.13-0.32).**
+
+# v65/v66 (2026-08-04, user video feedback on v64: hover-above + top-edge catch + wobble) → v67 RUNNING
+
+**User's v64 video read (correct):** catches were hover-above → slowly lower → hook the TOP EDGE; hold stayed
+above the payload (downwash on the load + degraded lift). Root cause: the outward chord gate was NEVER ON in
+v64 (attachment defaults 0°/False; the old 10-15° values were per-arm overrides that never entered F3/v64),
+and the bar band reached the rim (z_hi=0.30); the attached-spawn taught a ~30°-from-vertical (above-box) hold.
+
+**v65b (observer + outside gates: chord 25° signed-outward annealed, z_hi=0.22, above_box 15, lateral hold pose):
+the BEHAVIOR is fixed** — upsweep 97% @ v_up 0.81, over_box 0.43→0.147, deadhang 0.03, planarity 0.52, aim 3.4°,
+perp_ratio_rel 0.60 (target hit). **Cost: catch 0.166 / hold|caught 0.54** (strict gate = harder task; lateral
+hold harder than the old hover-above hold; still > the old no-gate honest 0.13 catch). Video (real IsaacLab
+render, restored pipeline): experiments/v65_66/v65b_isaac*.mp4.
+
+**v66 (v65 + translation-style shaping @ action_rate/accel 0.5 + drone_lat 1.0): COLLAPSED to dead-hang**
+(catch 0.0, deadhang 0.68) — penalties outweighed the sparser 25°-gated catch stream (the v62 lesson again).
+The translate-not-rotate idea stands; the dose was wrong.
+
+**v67 launched (both observer arms, 10k iters):** v67a = v65 + hold-fix (attached_spawn_frac0 0.7 [X2 evidence],
+attached_spawn_v0 0.6 dynamic-hold bootstrap, lock 8, tension 8) · v67b = same + translation shaping at 1/3 dose
+(action_rate/accel 0.15, drone_perp_osc 2.0, NO lat penalty).
+
+**Render pipeline restored (local):** (1) hybrid-GPU Vulkan fix — VK_ICD_FILENAMES=nvidia_icd.json + NV PRIME
+vars (post-reboot kit picked the Intel iGPU = the "hang"); (2) `try/finally os._exit(0)` was SWALLOWING all
+tracebacks (two trivial asserts looked like sim crashes) — all scripts now print tracebacks first. ALC render
+still segfaults; render locally.
+
+---
+
+# 🔎 HONEST CORRECTION (2026-07-22, post-adversarial-audit) — READ FIRST
+
+Two blind adversarial auditors corrected two overstatements. Both corrections stand on re-run data:
+
+**(A) CATCH WAS RADIUS-INFLATED.** All evals (incl. the historical v28 "GOALS MET" and the 0.30 threshold itself) used
+`capture_radius=0.13 m`. The config's own comment flags this as inflated; the TRUE task radius is 0.05 m (physical hook
+0.02–0.03 m). Re-run of the v46b winner:
+| radius | catch | hold | note |
+|---|---|---|---|
+| 0.13 (inflated) | 0.328 | 0.82 | the "GOALS MET" number |
+| **0.05 (TRUE)** | **0.130** | 0.85 | honest — does NOT meet 0.30 |
+So "catch ≥ 0.30" has only ever been cleared at the inflated radius. **Honest best catch ≈ 0.13.** The 30% goal is
+NOT met at the true radius by any policy to date. (hold ≈ 0.85 is radius-robust.)
+
+**(B) THE perp_ratio "OBSERVABILITY WALL" — checked in the RIGHT frame, still ~0.50 (undirected swing CONFIRMED).**
+Auditor hypothesis: perp_ratio (world-frame `hook_vel`) was contaminated by drone translation, so the swing might
+actually be directed in the drone-RELATIVE frame the reward optimizes. Added `perp_ratio_rel` to eval_behavior.py and
+re-ran: v46b perp_ratio_rel = **0.499 @0.13, 0.504 @0.05** — i.e. ALSO ~0.50. The artifact hypothesis is REFUTED; the
+swing is genuinely undirected/isotropic (conical) even in the reward's own frame. Note v45b directly penalized
+relative-lateral velocity with weight 20 and still got 0.50 → not a simple reward-weight issue. REFRAMED mechanism:
+directing a PLANAR perpendicular arc needs phase-locking the pendulum, which needs hook-phase feedback the actor lacks;
+a pivot adding blind perpendicular energy yields isotropic hook motion.
+
+**(C) THE LAST LEVER (v48, running):** a planar-DRIVEN pendulum stays planar. Instead of shaping the UNOBSERVED hook
+velocity, reward the DRONE's OWN observable velocity perpendicular to the wall (`drone_perp_osc_weight` on
+|v_drone·wall_normal|) and penalize along-bar drone motion (`drone_lat_penalty_weight`). Confines the observable pivot
+to the wall-normal plane → the hook should follow into a planar perpendicular arc, with clean credit assignment. Arms:
+v48a (blend: drone-osc + hook-swing), v48b (pure lever). Success = perp_ratio_rel rises off 0.50 on the honest metric.
+
+---
+
+# 🔑 (earlier, 2026-07-22) — swing_amp UNSTUCK; perp_ratio is the last blocker
+
+The swing rewards (energy pe/ke + arc + swing_perp) **broke swing_amp free**: the previously-immovable ~0.08 m arc
+jumped to **0.70–1.17 m** (v44a/b/c), and the hover DIED (`over_box_frac` 0.88 → ~0.03). Two of the three walls fell.
+BUT perp_ratio stayed pinned at **0.50** and jerk EXPLODED (12 → 40–106), and catch collapsed to ~0.004.
+
+**Diagnosis (data-backed):** the **hook_ke energy reward = `0.5·|v_hook−v_drone|²` is DIRECTION-AGNOSTIC.** The drone
+maximizes it by thrashing the hook in a wild OMNIDIRECTIONAL arc — huge amplitude (swing_amp↑), random direction
+(perp_ratio=0.50), violent (jerk↑ → the PhysX hangs), flailing PAST the bar (catch↓). One term, all three failures.
+
+**Two hard walls now understood:**
+1. *Observability* — actor is hook-blind (frozen 153-dim obs). Limits fine arc CONTROL.
+2. *Physics-stability* — strong/omnidirectional swing rewards yank the wire → tension spike → PhysX blow-up → GPU hang.
+   Dose-response CONFIRMED: v41(no swing)=full 10k stable; v44(moderate,no pump)=hang ~3200; v44c(mild pump)=1324;
+   v42(strong+pump)=1123; v43b(max+pump)=172. More/omnidirectional swing reward → earlier hang.
+
+**THE FIX (v45, 2026-07-22):** energy OFF; keep ONLY DIRECTIONAL swing terms (`swing_perp`, `arc_perp`, capped) + hard
+`swing_lateral` penalty. Arms: v45a(bal,appr2) v45b(hardperp lat=20,appr1) v45c(guidedir,appr4). **All 3 ran the FULL
+10k STABLY (no hang) → confirms the energy term was the physics-destabilizer; directional-only defeats the stability wall.**
+
+**v45 RESULT (2026-07-22) — perp_ratio wall is FINAL; achievable frontier improved:**
+| arm | catch | hold | perp_ratio | swing_amp | jerk | over_box |
+|---|---|---|---|---|---|---|
+| v45a | 0.059 | 0.85 | **0.500** | 0.11 | 17.5 | 0.18 |
+| v45b (lat=20) | 0.023 | 0.68 | **0.501** | 0.24 | 12.7 | 0.09 |
+| v45c (appr4) | **0.236** | 0.84 | **0.487** | 0.13 | 18.7 | 0.17 |
+
+- **perp_ratio = 0.50 is IMMOVABLE** — even a crushing in-plane penalty (v45b lat=20) can't move it. Across ~15 experiments
+  (velocity/energy/displacement/directional rewards, every gate) it never leaves 0.50. **CONCLUSION: 0.50 is the
+  info-theoretic floor for a HOOK-BLIND actor — you cannot direct an arc you cannot observe. The directed (perpendicular)
+  swing is UNREACHABLE with the frozen 153-dim obs.** This is the OBSERVABILITY wall, now proven, not just hypothesized.
+- BUT directional-only gives a CLEAN, non-hovering, smooth profile: **jerk 12–18 (vs 103 for v28's creepy champion),
+  over_box low (no hover), v45c catch 0.236** — a more PHYSICALLY-PLAUSIBLE catch than v28's hover-creep 0.32.
+- **v46 (2026-07-22)** pursues both: v46a(appr6 catch-push), v46b(RNN 512×2 — last capacity test vs perp_ratio wall:
+  can a bigger LSTM extract swing phase from the INDI residual?), v46c(seed7 reliability). v45c recipe = current best template.
+
+---
+
 # ⚠️ PHYSICAL-CORRECTNESS STATUS (2026-07-21) — read first
 
 The "catch reliably" goal is met (catch 0.31–0.60 by recipe, hold 0.94–0.98). The **PHYSICALLY-CORRECT swing goal is

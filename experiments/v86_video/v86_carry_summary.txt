@@ -1,0 +1,7 @@
+==================== v86 CARRY ROLLOUT ====================
+ checkpoint     : experiments/best_checkpoints/v86_ppo_handoff_9999_eplen1400_poserr0.30_from_r2_TRANSPORT.pt
+ steps / frames : 2400 / 800
+ episodes ended : 1 (crash-terminated: 0)
+ ep_len         : mean 1999  median 1999  max 1999 (timeout=2000)
+ pos_error mean : 0.159 m (last quarter: 0.302)
+===========================================================

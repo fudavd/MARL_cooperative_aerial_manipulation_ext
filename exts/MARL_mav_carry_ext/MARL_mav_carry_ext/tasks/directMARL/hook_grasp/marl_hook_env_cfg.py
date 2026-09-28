@@ -165,6 +165,11 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
     low_level_decimation: int = 1
     max_thrust_pp = 6.25  # N
 
+    # --- hook bob mass (kg): top-level mirror of events.randomize_hook_mass so --env_kv can set it (the
+    # event's nested params dict is out of env_kv's reach). The launch scripts wire this value into the
+    # startup mass-randomization event (fixed mass: (m, m)). 0.30 = current default; 0.05 = the light July tip.
+    hook_mass_kg: float = 0.30
+
     # --- basket + bar targets (analytic; basket is visualization-only, no static collider) ----------
     # Basket geometry in its own frame: vertical walls, half-extents (hx, hy), wall height range.
     # Box footprint matches the hover/transport payload (load_length_x = load_length_y = 0.275 -> a
@@ -344,6 +349,25 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
     # real cost for the "crash down -> wire loose -> detach" failure, beyond merely losing the small taut bonus.
     anti_sag_weight: float = 0.0        # penalty on downward drone speed while attached
     slack_penalty_weight: float = 0.0   # penalty on slack depth clamp(taut_thr - dist_da, 0) while attached
+    # STRAIGHT-WIRE swing shaping (v77, 2026-08-06, user diagnosis of the light-hook failure: the drone pumps
+    # at a frequency ABOVE the pendulum's ~0.67 Hz natural mode and achieves the chord angle by BENDING the
+    # flexible wire — a whip, not a swing; the chord gate measures the straight anchor->hook line, so bending
+    # passes it spuriously while the hook arrives without coherent arc momentum). Penalize the CHORD-LENGTH
+    # DEFICIT (wire_length - |hook-drone|) beyond a small sag margin during the UNATTACHED phase: a bent wire
+    # shortens the chord, a true straight-wire pendulum swing keeps it ~= wire_length. A straight wire cannot
+    # be whipped at high frequency -> the drone is forced to pump at the pendulum's natural frequency. Opt-in.
+    wire_straight_weight: float = 0.0   # penalty per metre of chord deficit beyond the margin, unattached phase
+    wire_straight_margin: float = 0.03  # m: free sag/curvature allowance (normal catenary + light bend costs 0)
+
+    # PULL-AWAY transition shaping (v72, 2026-08-05, user: "it doesn't hold it taut after the catch"): while
+    # ATTACHED and the wire is still SLACK-ish, REWARD the drone's radial velocity AWAY from the attach point.
+    # The catch happens mid-swing close to the wall; the drone must immediately climb/back off ~0.5 m to tension
+    # the wire, but the existing taut/slack terms only score the resulting STATE — the transition MANEUVER itself
+    # was unshaped, so the drone lingered, slack outlasted the grace dwell, and the detach dice rolled (holds
+    # ~0.6). Signed (drifting back toward the attach point costs), capped at 1 m/s, and active ONLY below the
+    # taut-ramp top so a firmly taut hover earns nothing (no orbit-farming). Opt-in (0 = off).
+    pull_away_weight: float = 0.0
+
     # AIMED up-sweep (raises catch PRECISION): reward the up-stroke weighted by nearness to the bar exp(-k*dist)
     # instead of the binary impact-box gate, so the swing is rewarded most when it peaks ON the bar. Opt-in.
     reward_aimed_upsweep: bool = False
@@ -373,6 +397,29 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
     swing_still_weight: float = 0.0     # penalty on the dead hang (hook straight below the drone AND not swinging)
     swing_still_radius: float = 0.15    # m: horizontal hook-under-drone offset scale; exp(-(horiz/r)^2) -> 1 = dead below
     swing_still_speed: float = 0.3      # m/s: hook-vs-drone relative speed at/above which it is NOT a standstill
+    # --- DRONE-PIVOT PLANAR OSCILLATION (2026-07-22): shape the drone's OWN (observable) velocity instead of the
+    # hook's (unobserved). Rewarding hook-relative perp velocity left perp_ratio_rel stuck ~0.50 (isotropic/conical
+    # swing) even with a crushing relative-lateral penalty -> the actor can't phase-lock an unobserved pendulum. A
+    # planar-DRIVEN pendulum stays planar, so reward |v_drone . wall_normal| (an in-plane pump the actor fully sees)
+    # and penalize |v_drone . bar_axis| to confine the pivot to the wall-normal plane. Unattached-phase only. Opt-in.
+    drone_perp_osc_weight: float = 0.0    # reward on clamp(|v_drone . wall_normal|, max=drone_perp_osc_cap)
+    drone_perp_osc_cap: float = 1.5       # m/s: cap on the rewarded drone perpendicular speed
+    drone_lat_penalty_weight: float = 0.0 # penalty on |v_drone . bar_axis| (drone drifting along the wall face)
+    # SWING-BY-STOPPING (2026-07-22): reward the drone COMING TO REST near the wall -> the hook's momentum (from the
+    # approach) whips into a pendulum swing (paired with the hook-swing terms). Starves "wobble in place". Opt-in.
+    drone_stop_weight: float = 0.0        # reward exp(-(||v_drone||/scale)^2)*swing_active when hook<drone_stop_radius, unattached
+    drone_stop_scale: float = 0.4         # m/s: speed scale -> reward ~0.6 at this speed, ->1 as the drone fully stops
+    drone_stop_radius: float = 0.35       # m: hook->bar distance under which the stop reward is active (near-wall only)
+    drone_stop_swing_ref: float = 0.5     # m/s: hook rel-speed at which swing_active saturates to 1 -> couples stop with a
+                                          # LIVE swing so a static dead-hang (hook still) earns nothing (anti hover-farm)
+    # SOLID-BOX collision for the DRONE (v55): make the box "solid" for the drone base via the same spring-damper used
+    # to keep the hook out (no real Isaac collider) -> the drone can't fly THROUGH the box and must aim the HOOK.
+    drone_wall_collision: bool = False
+    drone_wall_margin: float = 0.12       # m: extra footprint margin for the drone body radius (on top of wall_collision_margin)
+    drone_stop_outside_box: bool = False  # v54: only reward stopping when the DRONE is OUTSIDE the basket footprint ->
+                                          # halt outside + swing the hook IN (positive gate needs drone outside), not park over box
+    drone_decel_weight: float = 0.0       # v54: reward the DECELERATION EVENT (prev_speed - cur_speed, clamped>0) near wall,
+                                          # swing- & outside-gated -> rewards the braking maneuver itself (un-farmable by hover)
     # --- ARC-AMPLITUDE shaping (2026-07-20): reward the pendulum ARC directly, not just its velocity. The velocity
     # terms (swing_perp) can be satisfied by a small fast wobble; the auditors showed swing_amp stayed ~0.08 m (no
     # real arc) and perp_ratio ~0.50 (half sideways skim). These reward the hook's DISPLACEMENT from straight-below
@@ -395,6 +442,28 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
     hook_pe_weight: float = 0.0        # reward hook POTENTIAL energy vs drone height: g*(z_hook - z_drone + wire_length)
     hook_ke_weight: float = 0.0        # reward hook KINETIC energy vs drone: 0.5*|v_hook - v_drone|^2 (swing energy)
     hook_ke_cap: float = 4.0           # m^2/s^2: cap on |v_hook - v_drone|^2 in the KE term (anti reward-explosion)
+
+    # --- v64 COMMANDED-PLANE swing shaping (2026-07-24): transplant of the v63 swing-test reward that produced an
+    # AIMED PLANAR pendulum swing even HOOK-BLIND (aim ~1-2deg to a commanded azimuth; see marl_swing_env_cfg.py and
+    # experiments/v63/). Here the "command" is the task geometry the actor already observes: u_hat = the assigned
+    # wall's NORMAL (the perpendicular plane a catch up-sweep needs), w_hat = the BAR AXIS (off-plane, to suppress).
+    # Terms (drone-relative pendulum quantities, unattached phase):
+    #   + amp   : |(hook-drone) . u_hat| capped     -> in-plane arc amplitude — gated NEAR the wall (swing_plane_zone)
+    #   + vel   : |v_swing . u_hat| capped          -> in-plane swing speed   — gated NEAR the wall
+    #   - off   : |(hook-drone) . w_hat|            -> off-plane displacement — whole unattached phase
+    #   - vlat  : |v_swing . w_hat|                 -> off-plane swing speed  — whole unattached phase
+    #   - whirl : |L_z| (azimuthal ang. momentum)   -> conical-whirl suppressor (v63's planarity lever) — whole phase
+    # The near-wall gate on the POSITIVE terms prevents a "swing in place far from the box" farm (the v62 lesson:
+    # any positionless positive stream gets farmed); the penalties run everywhere so the arriving swing is already
+    # planar. Replaces the failed swing_perp/arc/energy/pump shaping (leave those 0). Opt-in (0 = off).
+    swing_plane_amp_weight: float = 0.0   # + in-plane (wall-normal) pendulum displacement, near-wall gated
+    swing_plane_amp_cap: float = 0.5      # m: cap on rewarded in-plane displacement (~wire length)
+    swing_plane_vel_weight: float = 0.0   # + in-plane swing speed, near-wall gated
+    swing_plane_vel_cap: float = 1.5      # m/s: cap on rewarded in-plane swing speed
+    swing_plane_off_weight: float = 0.0   # - off-plane (bar-axis) displacement, whole unattached phase
+    swing_plane_vlat_weight: float = 0.0  # - off-plane swing speed, whole unattached phase
+    swing_plane_whirl_weight: float = 0.0 # - |L_z| azimuthal whirl (collapses cone -> plane), whole unattached phase
+    swing_plane_zone: float = 0.7         # m: hook->target dist under which the POSITIVE swing terms are active
 
     # PENDULUM PUMP shaping (raises catch via a REPEATABLE pump-release-lift maneuver -> consistent swing timing,
     # vs scattershot up-sweeps). Two shaping terms on the drone's OWN (controllable) motion; the "stop/reverse to
@@ -456,6 +525,19 @@ class MARLHookGraspEnvCfg(DirectMARLEnvCfg):
     # hook = downwash into the load) and latched on accident. Strengthened so smoothness + downwash matter again:
     action_smoothness_weight = 1.0   # 0.5->1.0: damp the erratic up/down bobbing (random-swing accidental latch)
     body_rate_penalty_weight = 1.0   # 0.5->1.0: damp erratic attitude thrashing
+    # DIRECT action-VARIABILITY penalties (2026-07-22): the exp(-.) terms above are saturating REWARDS (bounded, weak
+    # gradient once smooth); these are unbounded quadratic PENALTIES that keep biting the more the actions jump.
+    # action_rate = ||a_t - a_{t-1}||^2 (1st diff = jerky commands); action_accel = ||a_t - 2 a_{t-1} + a_{t-2}||^2
+    # (2nd diff = shakiness/oscillation). Both per-drone-normalized, unattached+attached. Opt-in (0 = off).
+    action_rate_penalty_weight: float = 0.0    # penalty on ||a_t - a_{t-1}||^2 -- punishes abrupt command changes
+    action_accel_penalty_weight: float = 0.0   # penalty on ||a_t - 2 a_{t-1} + a_{t-2}||^2 -- punishes command shake/oscillation
+    # PHASE-GATED smoothing (v70, 2026-08-05): the v69 single-variable test showed the action penalties LIFT HOLD
+    # 0.54->0.88 (calm control = taut wire = no slack-detach) but TAX the catch stroke (catch 0.166->0.097): the
+    # energetic near-wall swing is exactly what they punish. This gate turns the two penalties OFF inside the
+    # near-wall UNATTACHED swing zone (hook->target < smooth_free_zone) and keeps them ON everywhere else
+    # (approach cruise + the attached hold) -> calm flight and taut holds WITHOUT taxing the swing stroke.
+    action_smooth_phase_gate: bool = False
+    smooth_free_zone: float = 0.7              # m: hook->target dist under which (unattached) the penalties are OFF
     force_penalty_weight = 0.5
     downwash_rew_weight = 3.0     # 0.5->3.0: strongly reward keeping the hook OFF the prop-wash axis -> the drone
                                   # must pull the wire at an angle from OUTSIDE (props not over the load), not hover on top

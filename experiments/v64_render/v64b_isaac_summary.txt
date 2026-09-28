@@ -1,0 +1,8 @@
+==================== RSL_RL LSTM ROLLOUT ====================
+ checkpoint        : experiments/best_checkpoints/v64b_planeobs_9999_catch0.50_hold0.95_HONESTr005_upsweep73_BEST.pt
+ steps / frames    : 2000 / 667
+ catches / detaches: 1 / 1
+ min hook<->bar (m): 0.014   (capture radius 0.05)
+ attached steps    : 672 / 2000
+ success (held)    : False
+============================================================

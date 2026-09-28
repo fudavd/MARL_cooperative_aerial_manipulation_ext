@@ -1,0 +1,8 @@
+[eval] fixed_mappo (16:05:11)
+[eval] fixed_mappo rc=0 : [COMPARE] model=paper  obs_dim=135  eval_ret=230.47+-50.0  pos_err=0.173 m  ori_err=0.289 rad  success=95.4%  (n=582 episodes)
+[eval] rand_hebbian_ui100 (16:23:16)
+[eval] rand_hebbian_ui100 rc=0 : [COMPARE] model=hebbian  obs_dim=45  eval_ret=9.34+-4.4  pos_err=1.103 m  ori_err=1.765 rad  success=1.0%  (n=576 episodes)
+[eval] MISSING SET DONE 16:25:13
+[eval] rand_mild_hebbian (16:25:13)
+[eval] rand_mild_hebbian rc=0 : [COMPARE] model=hebbian  obs_dim=45  eval_ret=11.93+-4.5  pos_err=1.092 m  ori_err=1.745 rad  success=1.2%  (n=576 episodes)
+[eval] rand_mild_mappo (16:27:35)

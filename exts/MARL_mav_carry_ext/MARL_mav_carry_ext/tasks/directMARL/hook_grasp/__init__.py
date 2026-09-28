@@ -23,3 +23,16 @@ gym.register(
         "skrl_mappo_cfg_entry_point": f"{agents.__name__}:skrl_mappo_cfg.yaml",
     },
 )
+
+# Clean, confound-free directed-swing CONTROLLABILITY test env (same plant, no basket/catch/curriculum).
+# See marl_swing_env.py / marl_swing_env_cfg.py. Reuses the rsl_rl adapter's true_hook / hook_observer arms.
+gym.register(
+    id="Isaac-flycrane-swing-test-v0",
+    entry_point=f"{__name__}.marl_swing_env:MARLSwingTestEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.marl_swing_env_cfg:MARLSwingTestEnvCfg",
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+        "skrl_mappo_cfg_entry_point": f"{agents.__name__}:skrl_mappo_cfg.yaml",
+    },
+)

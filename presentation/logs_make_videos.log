@@ -1,0 +1,33 @@
+[keep] 1a_fixed_ABCD -- already rendered
+[render] 1b_fixed_ABCW  (14:39:34)
+[render] 1b_fixed_ABCW done rc=0 (14:41:04)
+[render] 1c_fixed_ABCDW  (14:41:04)
+[render] 1c_fixed_ABCDW done rc=0 (14:42:31)
+[render] 1d_fixed_mappo  (14:42:31)
+[render] 1d_fixed_mappo done rc=0 (14:43:57)
+[render] 2a_rand_mappo  (14:43:57)
+[render] 2a_rand_mappo done rc=0 (14:45:21)
+[render] 2b_rand_hebbian  (14:45:21)
+[render] 2b_rand_hebbian done rc=0 (14:46:47)
+[render] 2c_rand_hebbian_fixedtrained  (14:46:47)
+[render] 2c_rand_hebbian_fixedtrained done rc=0 (14:48:12)
+[render] ALL DONE 14:48:12
+total 7904
+drwxrwxr-x 2 fuda fuda    4096 Sep 13 14:48 .
+drwxrwxr-x 5 fuda fuda    4096 Sep 13 14:40 ..
+-rw-rw-r-- 1 fuda fuda 1840669 Sep 13 14:39 0_context_randomized_attachment.mp4
+-rw-rw-r-- 1 fuda fuda  432821 Sep 13 14:39 0_context_randomized_attachment.png
+-rw-rw-r-- 1 fuda fuda  849642 Sep 13 14:39 1a_fixed_ABCD.mp4
+-rw-rw-r-- 1 fuda fuda     392 Sep 13 14:39 1a_fixed_ABCD_summary.json
+-rw-rw-r-- 1 fuda fuda  697936 Sep 13 14:41 1b_fixed_ABCW.mp4
+-rw-rw-r-- 1 fuda fuda     373 Sep 13 14:41 1b_fixed_ABCW_summary.json
+-rw-rw-r-- 1 fuda fuda  736398 Sep 13 14:42 1c_fixed_ABCDW.mp4
+-rw-rw-r-- 1 fuda fuda     374 Sep 13 14:42 1c_fixed_ABCDW_summary.json
+-rw-rw-r-- 1 fuda fuda  893012 Sep 13 14:43 1d_fixed_mappo.mp4
+-rw-rw-r-- 1 fuda fuda     363 Sep 13 14:43 1d_fixed_mappo_summary.json
+-rw-rw-r-- 1 fuda fuda  923983 Sep 13 14:45 2a_rand_mappo.mp4
+-rw-rw-r-- 1 fuda fuda     369 Sep 13 14:45 2a_rand_mappo_summary.json
+-rw-rw-r-- 1 fuda fuda  839497 Sep 13 14:46 2b_rand_hebbian.mp4
+-rw-rw-r-- 1 fuda fuda     379 Sep 13 14:46 2b_rand_hebbian_summary.json
+-rw-rw-r-- 1 fuda fuda  827035 Sep 13 14:48 2c_rand_hebbian_fixedtrained.mp4
+-rw-rw-r-- 1 fuda fuda     379 Sep 13 14:48 2c_rand_hebbian_fixedtrained_summary.json

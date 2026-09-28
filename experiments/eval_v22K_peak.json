@@ -1,0 +1,16 @@
+{
+  "checkpoint": "logs/skrl/ppo_flycrane_hook/2026-07-13_22-21-41_ppo_torch_v22K_honestcombo/checkpoints/agent_97500.pt",
+  "num_envs": 256,
+  "sim_steps": 3000,
+  "hold_steps": 100,
+  "capture_radius": 0.13,
+  "episodes": 798,
+  "caught_episodes": 141,
+  "held_episodes": 64,
+  "catch_rate": 0.1767,
+  "hold_success_given_caught": 0.4539,
+  "attached_frac": 0.109,
+  "GOAL_catch_0.30": false,
+  "GOAL_hold_0.80": false,
+  "GOALS_MET": false
+}

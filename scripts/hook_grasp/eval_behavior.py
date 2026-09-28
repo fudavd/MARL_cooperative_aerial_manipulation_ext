@@ -50,8 +50,17 @@ parser.add_argument("--indi_residual", action="store_true", default=False)
 parser.add_argument("--actor_history_len", type=int, default=0)
 parser.add_argument("--near_wall", type=float, default=0.35, help="hook->bar dist (m) under which approach-behavior is scored")
 parser.add_argument("--policy_kv", type=str, default="", help="ActorCriticRecurrent overrides — MUST match training arch (e.g. 'rnn_hidden_dim=512,rnn_num_layers=2') or the checkpoint won't load.")
+parser.add_argument("--feedforward", action="store_true", default=False,
+                    help="Checkpoint was trained with --feedforward (plain ActorCritic MLP, no RNN). Must match training.")
+parser.add_argument("--hook_observer", action="store_true", default=False, help="Policy was trained with the hook-observer obs augmentation (+3); loads observer_final.pt/observer_latest.pt next to the checkpoint.")
+parser.add_argument("--true_hook", action="store_true", default=False, help="Policy was trained with the TRUE-hook (privileged) obs augmentation (+3); appends ground-truth relative hook, no observer weights needed.")
 parser.add_argument("--env_kv", type=str, default="", help="env_cfg overrides applied at eval (e.g. 'attachment.min_chord_angle_deg=10' to test the physical-swing gate). Match the TRUE task.")
 parser.add_argument("--out", type=str, default="")
+parser.add_argument("--dump_traj", type=str, default="",
+                    help="If set, save per-step WORLD-frame trajectories (drone, hook, bar point, basket pose, attached) "
+                         "for the first --dump_envs envs to this .npz — for local matplotlib scene animation (no Isaac render).")
+parser.add_argument("--dump_envs", type=int, default=4)
+parser.add_argument("--dump_steps", type=int, default=1200)
 AppLauncher.add_app_launcher_args(parser)
 args_cli, _ = parser.parse_known_args()
 sys.argv = [sys.argv[0]]
@@ -87,7 +96,8 @@ def main():
     device = args_cli.device if args_cli.device is not None else "cuda:0"
     env_cfg = parse_env_cfg(args_cli.task, device=device, num_envs=args_cli.num_envs)
     env_cfg.seed = args_cli.seed
-    for _attr in ("capture_curriculum", "hold_curriculum", "spawn_curriculum", "attached_spawn_curriculum"):
+    for _attr in ("capture_curriculum", "hold_curriculum", "spawn_curriculum", "attached_spawn_curriculum",
+                  "chord_angle_curriculum"):
         if hasattr(env_cfg, _attr):
             setattr(env_cfg, _attr, False)
     if hasattr(env_cfg, "attachment") and args_cli.capture_radius > 0:
@@ -112,10 +122,27 @@ def main():
         setattr(obj, attr, val)
         print(f"[eval-behavior] env override: {k.strip()} = {val}")
 
+    # wire the top-level hook mass into the startup mass event (matches train_rslrl; env_kv can set hook_mass_kg)
+    if hasattr(env_cfg, "hook_mass_kg") and hasattr(env_cfg, "events"):
+        _m = float(env_cfg.hook_mass_kg)
+        env_cfg.events.randomize_hook_mass.params["mass_distribution_params"] = (_m, _m)
+        print(f"[eval-behavior] hook bob mass = {_m*1000:.0f} g")
+
     env = gym.make(args_cli.task, cfg=env_cfg)
     base = env.unwrapped
     assert isinstance(base, DirectMARLEnv)
-    adapter = RslRlMarlAdapter(base)
+    adapter = RslRlMarlAdapter(base, hook_observer=args_cli.hook_observer, true_hook=args_cli.true_hook)
+    if args_cli.true_hook:
+        pass  # ground-truth appended live; no weights to load
+    elif args_cli.hook_observer:
+        adapter.observer_eval = True   # frozen estimator at eval (no online update)
+        _ckpt_dir = os.path.dirname(os.path.abspath(args_cli.checkpoint))
+        _obs_wt = os.path.join(_ckpt_dir, "observer_final.pt")
+        if not os.path.exists(_obs_wt):
+            _obs_wt = os.path.join(_ckpt_dir, "observer_latest.pt")
+        assert os.path.exists(_obs_wt), f"hook_observer eval needs observer weights next to the checkpoint; none at {_ckpt_dir}"
+        adapter.load_observer(_obs_wt)
+        print(f"[eval_behavior] loaded hook observer <- {_obs_wt}")
     # policy_kv MUST match the trained architecture or runner.load() fails on a size mismatch.
     pol = {}
     for tok in args_cli.policy_kv.split(","):
@@ -131,7 +158,7 @@ def main():
             except ValueError:
                 pol[k.strip()] = v
     train_cfg = make_runner_cfg(experiment_name="behavior", max_iterations=1, device=device, logger="tensorboard",
-                                policy_overrides=pol or None)
+                                policy_overrides=pol or None, feedforward=args_cli.feedforward)
     runner = OnPolicyRunner(adapter, train_cfg, log_dir=None, device=device)
     runner.load(args_cli.checkpoint)
     runner.eval_mode()
@@ -153,11 +180,27 @@ def main():
     # behavior accumulators (all on-device scalars)
     up_sum = torch.zeros((), device=dev); up_pos = torch.zeros((), device=dev); up_n = torch.zeros((), device=dev)
     perp_sum = torch.zeros((), device=dev); lat_sum = torch.zeros((), device=dev)
+    # RELATIVE-frame (drone-pivot) perp/lat — matches what the swing REWARD optimizes (v_swing = hook_vel - drone_vel).
+    # World-frame perp_ratio is contaminated by drone translation near the wall; the relative frame is the honest arc-direction metric.
+    perp_rel_sum = torch.zeros((), device=dev); lat_rel_sum = torch.zeros((), device=dev)
+    # COVARIANCE-based planarity + WHIRL invariant (research-panel fix, 2026-07-23): perp_ratio (an L1 marginal ratio)
+    # aliases a cone, a planar-but-misaimed arc, and dead-hang all to 0.50. These are frame-independent discriminators:
+    #  - swing_cov = 2x2 covariance of (v_perp_rel, v_lat_rel) -> eigenratio: planarity (rank-1=planar, ~1=isotropic/cone)
+    #    and principal-axis angle vs the wall normal = AIM error.
+    #  - L_z whirl = vertical component of (rel x v_swing): ~0 for a planar vertical arc, large for a cone/precession.
+    cov_pp = torch.zeros(2, 2, device=dev); cov_p = torch.zeros(2, device=dev); cov_n = torch.zeros((), device=dev)
+    lz_abs_sum = torch.zeros((), device=dev); whirl_sin_sum = torch.zeros((), device=dev)
     dead_n = torch.zeros((), device=dev); near_n = torch.zeros((), device=dev)
     jerk_sum = torch.zeros((), device=dev); jerk_n = torch.zeros((), device=dev)
+    slack_sum = torch.zeros((), device=dev); attspeed_sum = torch.zeros((), device=dev); att_n = torch.zeros((), device=dev)
     overbox_n = torch.zeros((), device=dev); step_n = torch.zeros((), device=dev)  # drone-over-box-footprint fraction
     hook_h_hist = torch.zeros(E, SWING_WINDOW, device=dev)
     amp_sum = torch.zeros((), device=dev); amp_n = torch.zeros((), device=dev)
+
+    # optional world-frame trajectory dump (first K envs) for local scene animation
+    Kd = min(args_cli.dump_envs, E)
+    dump = bool(args_cli.dump_traj)
+    d_drone, d_hook, d_bar, d_att, d_done, d_bpos, d_bquat = [], [], [], [], [], [], []
 
     for t in range(args_cli.steps):
         with torch.inference_mode():
@@ -175,6 +218,12 @@ def main():
         hook_bar = torch.norm(hook_pos - bar_pos, dim=-1)
         attached = base.attached.any(dim=-1)
         newly = base._newly_caught.any(dim=-1)
+
+        if dump and t < args_cli.dump_steps:
+            d_drone.append(drone_pos[:Kd].detach().cpu()); d_hook.append(hook_pos[:Kd].detach().cpu())
+            d_bar.append(bar_pos[:Kd].detach().cpu()); d_att.append(attached[:Kd].detach().cpu())
+            d_done.append(dones[:Kd].detach().cpu())
+            d_bpos.append(base.basket_pos_w[:Kd].detach().cpu()); d_bquat.append(base.basket_quat_w[:Kd].detach().cpu())
 
         # DRONE-OVER-BOX fraction: is the drone horizontally inside the basket footprint (parked ON TOP)?
         drone_bf = quat_rotate_inverse(base.basket_quat_w, drone_pos - base.basket_pos_w)
@@ -195,11 +244,29 @@ def main():
         if near.any():
             perp_sum += v_perp[near].abs().sum()
             lat_sum += v_lat[near].abs().sum()
+            # relative-frame (subtract drone/pivot velocity) — the arc direction the reward actually shapes
+            v_swing = hook_vel - drone_vel
+            vpr = (v_swing * wall_normal).sum(-1)      # perp (into/out of wall), relative
+            vlr = (v_swing * bar_axis).sum(-1)         # lateral (along bar), relative
+            perp_rel_sum += vpr[near].abs().sum()
+            lat_rel_sum += vlr[near].abs().sum()
             rel = hook_pos - drone_pos
             horiz = torch.norm(rel[:, :2], dim=-1)
             vrel = torch.norm(hook_vel - drone_vel, dim=-1)
             dead = near & (horiz < DEADHANG_HORIZ) & (vrel < DEADHANG_VREL)
             dead_n += dead.sum(); near_n += near.sum()
+            # covariance + whirl: only over genuinely-SWINGING near-wall samples (kill the 0/0 dead-hang alias)
+            sw = near & (vrel > 0.15)
+            if sw.any():
+                p = torch.stack([vpr[sw], vlr[sw]], dim=-1)     # (M,2) relative swing velocity in the wall frame
+                cov_pp += (p.unsqueeze(-1) * p.unsqueeze(-2)).sum(0)
+                cov_p += p.sum(0); cov_n += sw.sum()
+                # L_z = (rel x v_swing)_z, and normalized whirl = |L_z|/(|rel_h||v_h|) ~ sin(precession angle)
+                lz = rel[sw, 0] * v_swing[sw, 1] - rel[sw, 1] * v_swing[sw, 0]
+                relh = torch.norm(rel[sw, :2], dim=-1).clamp_min(1e-6)
+                vh = torch.norm(v_swing[sw, :2], dim=-1).clamp_min(1e-6)
+                lz_abs_sum += lz.abs().sum()
+                whirl_sin_sum += (lz.abs() / (relh * vh)).sum()
 
         # --- swing amplitude: peak-to-peak hook height over a rolling window (near-wall unattached) ---
         hook_h_hist = torch.roll(hook_h_hist, -1, dims=1)
@@ -212,6 +279,15 @@ def main():
         if attached.any() and hasattr(base, "_drone_jerk"):
             jm = torch.norm(base._drone_jerk, dim=-1).mean(dim=-1)
             jerk_sum += jm[attached].sum(); jerk_n += attached.sum()
+        # --- POST-CATCH ROCKING metrics (2026-08-05, user: "rocking motion makes the wire slack after catch"):
+        # slack_frac = fraction of attached steps with the wire SLACK (drone->attach dist < taut threshold);
+        # att_speed = mean drone speed while attached (a steady taut hold should hover near-still). ---
+        if attached.any():
+            taut_thr_m = base._acfg.wire_length - base._acfg.slack_margin
+            dist_da_m = torch.norm(drone_pos - base.attach_point_w[:, i], dim=-1)
+            slack_sum += ((dist_da_m < taut_thr_m) & attached).float().sum()
+            attspeed_sum += torch.norm(drone_vel, dim=-1)[attached].sum()
+            att_n += attached.sum()
 
         # --- task bookkeeping ---
         ever_caught |= newly
@@ -232,6 +308,21 @@ def main():
     v_up_catch = float((up_sum / up_n).item()) if up_n > 0 else 0.0
     denom = (perp_sum + lat_sum)
     perp_ratio = float((perp_sum / denom).item()) if denom > 0 else 0.0
+    denom_rel = (perp_rel_sum + lat_rel_sum)
+    perp_ratio_rel = float((perp_rel_sum / denom_rel).item()) if denom_rel > 0 else 0.0
+    # covariance-based planarity + aim + whirl (frame-independent; only over swinging samples)
+    planarity = 0.0; aim_deg = float("nan"); whirl_sin = float("nan"); lz_abs = float("nan")
+    if cov_n > 1:
+        mean_p = cov_p / cov_n
+        cov = cov_pp / cov_n - torch.outer(mean_p, mean_p)
+        cov = 0.5 * (cov + cov.t())                                    # symmetrize (numerical)
+        evals, evecs = torch.linalg.eigh(cov)                          # ascending: evals[1] >= evals[0]
+        l1 = float(evals[1].clamp_min(0).item()); l2 = float(evals[0].clamp_min(0).item())
+        planarity = round(1.0 - l2 / l1, 4) if l1 > 1e-9 else 0.0      # 1=planar arc, 0=isotropic/cone
+        pv = evecs[:, 1]                                               # principal axis (dominant swing direction)
+        aim_deg = round(float(torch.rad2deg(torch.atan2(pv[1].abs(), pv[0].abs())).item()), 2)  # 0=perp(into wall),90=along bar
+        whirl_sin = round(float((whirl_sin_sum / cov_n).item()), 4)    # 0=planar vertical arc, ->1=conical whirl
+        lz_abs = round(float((lz_abs_sum / cov_n).item()), 4)
     deadhang_frac = float((dead_n / near_n).item()) if near_n > 0 else 0.0
     swing_amp = float((amp_sum / amp_n).item()) if amp_n > 0 else 0.0
     jerk = float((jerk_sum / jerk_n).item()) if jerk_n > 0 else float("nan")
@@ -251,11 +342,18 @@ def main():
         "upsweep_frac": round(upsweep_frac, 4),
         "v_up_catch": round(v_up_catch, 4),
         "perp_ratio": round(perp_ratio, 4),
+        "perp_ratio_rel": round(perp_ratio_rel, 4),
+        "planarity": planarity,        # 1=planar arc, 0=isotropic/conical (covariance eigenratio; de-aliases perp_ratio)
+        "aim_deg": aim_deg,            # principal swing axis vs wall normal: 0=perpendicular(good), 90=along the bar
+        "whirl_sin": whirl_sin,        # |L_z|/(|r_h||v_h|): 0=planar vertical arc, ->1=conical whirl
+        "lz_abs": lz_abs,              # mean |azimuthal angular momentum| (whirl invariant, unnormalized)
         "deadhang_frac": round(deadhang_frac, 4),
         "swing_amp": round(swing_amp, 4),
         "jerk": round(jerk, 3) if jerk == jerk else None,
         "physicality_score": physicality,
         "over_box_frac": round(float((overbox_n / step_n).item()) if step_n > 0 else 0.0, 4),
+        "slack_frac": round(float((slack_sum / att_n).item()) if att_n > 0 else 0.0, 4),   # attached steps w/ slack wire (rocking symptom)
+        "att_speed": round(float((attspeed_sum / att_n).item()) if att_n > 0 else 0.0, 4), # mean drone speed while attached (want ~0)
         # gates: task goal AND physically-correct behavior
         "GOAL_catch_0.30": catch_rate >= 0.30,
         "GOAL_hold_0.80": hold_gc >= 0.80,
@@ -276,6 +374,17 @@ def main():
         os.makedirs(os.path.dirname(os.path.abspath(args_cli.out)), exist_ok=True)
         with open(args_cli.out, "w") as f:
             json.dump(result, f, indent=2); f.flush(); os.fsync(f.fileno())
+    if dump and d_drone:
+        import numpy as np
+        np.savez(args_cli.dump_traj,
+                 drone=torch.stack(d_drone, 0).numpy(), hook=torch.stack(d_hook, 0).numpy(),
+                 bar=torch.stack(d_bar, 0).numpy(), attached=torch.stack(d_att, 0).numpy(),
+                 done=torch.stack(d_done, 0).numpy(),
+                 basket_pos=torch.stack(d_bpos, 0).numpy(), basket_quat=torch.stack(d_bquat, 0).numpy(),
+                 half_x=float(base.cfg.basket_half_x), half_y=float(base.cfg.basket_half_y),
+                 wall_h=float(base.cfg.basket_wall_height),
+                 catch_rate=result["catch_rate"], hold=result["hold_success_given_caught"])
+        print(f"[eval_behavior] wrote trajectory dump {args_cli.dump_traj}")
     sys.stdout.flush()
     os._exit(0)
 

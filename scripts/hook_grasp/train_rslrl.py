@@ -44,10 +44,19 @@ parser.add_argument("--actor_history_len", type=int, default=0,
 parser.add_argument("--reward_norm", action="store_true", default=False,
                     help="Pathak reward normalization: divide reward by running discounted-return std so the "
                          "value function sees a stationary return scale across curriculum level shifts.")
+parser.add_argument("--hook_observer", action="store_true", default=False,
+                    help="Append a learned hook-position ESTIMATE (online-supervised against the true relative hook "
+                         "pos) to the actor obs -> gives the hook-blind actor a self-computed hook belief (+3 dims).")
+parser.add_argument("--true_hook", action="store_true", default=False,
+                    help="PRIVILEGED ablation: append the GROUND-TRUTH relative hook position to the actor obs (+3) "
+                         "instead of the estimate -> isolates observation vs control (does perfect info break the wall?).")
 parser.add_argument("--env_kv", type=str, default="",
                     help="Comma-sep env_cfg overrides applied AFTER the F3 recipe, e.g. "
                          "'reward_pump=true,pump_lift_weight=3.0,attachment.upsweep_v_min=0.06'. Rewards / "
                          "curriculum / gates only -- NEVER obs_dim/history/task-defining fields.")
+parser.add_argument("--feedforward", action="store_true", default=False,
+                    help="Memoryless ActorCritic (plain MLP) instead of the LSTM ActorCriticRecurrent "
+                         "(v84 architecture-reduction grid).")
 parser.add_argument("--policy_kv", type=str, default="",
                     help="Comma-sep ActorCriticRecurrent overrides, e.g. 'rnn_hidden_dim=512,rnn_num_layers=2'.")
 parser.add_argument("--algo_kv", type=str, default="",
@@ -143,19 +152,34 @@ def main():
     device = args_cli.device if args_cli.device is not None else "cuda:0"
     env_cfg = parse_env_cfg(args_cli.task, device=device, num_envs=args_cli.num_envs)
     env_cfg.seed = args_cli.seed
-    apply_f3_env_cfg(env_cfg)
-    if args_cli.indi_residual or args_cli.actor_history_len:
+    # The swing-test env is a self-contained directed-swing task (no basket / attachment / curriculum): skip the
+    # F3 grasp recipe and the INDI-residual obs surgery (its obs layout already bakes the residual in). The
+    # --true_hook / --hook_observer arms still work (the adapter appends +3 rel hook the same way).
+    is_swing = bool(getattr(env_cfg, "swing_test", False))
+    if not is_swing:
+        apply_f3_env_cfg(env_cfg)
+    if (args_cli.indi_residual or args_cli.actor_history_len) and not is_swing:
         H = args_cli.actor_history_len or env_cfg.history_len
         apply_indi_residual_cfg(env_cfg, actor_history_len=H, residual=args_cli.indi_residual)
         print(f"[train-rslrl] INDI-residual actor obs: residual={args_cli.indi_residual}  H={H}  "
               f"actor_obs_dim={next(iter(env_cfg.observation_spaces.values()))}")
     if args_cli.env_kv:
         _apply_env_kv(env_cfg, _parse_kv(args_cli.env_kv))
+    # wire the top-level hook mass into the startup mass event (fixed (m, m); nested dict is beyond env_kv)
+    if hasattr(env_cfg, "hook_mass_kg") and hasattr(env_cfg, "events"):
+        _m = float(env_cfg.hook_mass_kg)
+        env_cfg.events.randomize_hook_mass.params["mass_distribution_params"] = (_m, _m)
+        print(f"[train-rslrl] hook bob mass = {_m*1000:.0f} g")
 
     env = gym.make(args_cli.task, cfg=env_cfg)
     base = env.unwrapped
     assert isinstance(base, DirectMARLEnv), "train_rslrl expects a DirectMARLEnv (multi-agent) task."
-    adapter = RslRlMarlAdapter(base, reward_norm=args_cli.reward_norm)
+    adapter = RslRlMarlAdapter(base, reward_norm=args_cli.reward_norm, hook_observer=args_cli.hook_observer,
+                               observer_update_every=args_cli.num_steps_per_env, true_hook=args_cli.true_hook)
+    if args_cli.true_hook:
+        print("[train-rslrl] TRUE HOOK ON (privileged ablation): actor obs augmented with GROUND-TRUTH rel hook (+3)")
+    elif args_cli.hook_observer:
+        print("[train-rslrl] HOOK OBSERVER ON: actor obs augmented with a learned self-computed hook estimate (+3)")
     if args_cli.reward_norm:
         print("[train-rslrl] reward normalization ON (Pathak discounted-return-std): value fn sees a "
               "stationary return scale across curriculum shifts")
@@ -170,12 +194,15 @@ def main():
         wandb_project=args_cli.wandb_project,
         policy_overrides=_parse_kv(args_cli.policy_kv) if args_cli.policy_kv else None,
         algo_overrides=_parse_kv(args_cli.algo_kv) if args_cli.algo_kv else None,
+        feedforward=args_cli.feedforward,
     )
 
     log_root = os.path.abspath(os.path.join("logs", "rsl_rl", args_cli.experiment_name))
     log_dir = os.path.join(log_root, datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + f"_{args_cli.experiment_name}")
     os.makedirs(log_dir, exist_ok=True)
     print(f"[train-rslrl] logging to {log_dir}")
+    if args_cli.hook_observer:
+        adapter._save_path = os.path.join(log_dir, "observer_latest.pt")  # periodic saves (robust to kill)
 
     runner = OnPolicyRunner(adapter, train_cfg, log_dir=log_dir, device=device)
     if args_cli.resume:
@@ -183,6 +210,9 @@ def main():
         runner.load(args_cli.resume)
 
     runner.learn(num_learning_iterations=args_cli.max_iterations, init_at_random_ep_len=True)
+    if args_cli.hook_observer:
+        adapter.save_observer(os.path.join(log_dir, "observer_final.pt"))
+        print(f"[train-rslrl] saved hook observer -> {os.path.join(log_dir, 'observer_final.pt')}")
     env.close()
 
 
@@ -194,6 +224,11 @@ if __name__ == "__main__":
     # So finish wandb explicitly first, then hard-exit past the Isaac teardown.
     try:
         main()
+    except BaseException:
+        # os._exit in finally would otherwise SWALLOW the traceback (failures look like silent crashes)
+        import traceback
+        traceback.print_exc()
+        sys.stdout.flush(); sys.stderr.flush()
     finally:
         try:
             import wandb

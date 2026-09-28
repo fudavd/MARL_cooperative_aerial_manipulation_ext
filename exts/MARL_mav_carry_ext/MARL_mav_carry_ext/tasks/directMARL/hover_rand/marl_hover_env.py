@@ -106,6 +106,15 @@ class MARLHoverRandEnv(DirectMARLEnv):
         self._indi_controllers = {}
         for i in range(self._num_drones):
             self._indi_controllers[i] = IndiController(self.num_envs)
+        # per-drone INDI disturbance residual, mirrored into the actor obs iff cfg.actor_indi_residual
+        # (matches the hook-grasp actor layout: 45 base + 6 residual per frame)
+        self._indi_residual = torch.zeros(self.num_envs, self._num_drones, 6, device=self.device)
+        # CRN state (see cfg.crn): the ES trainer sets _crn_repeats = n_repeats and bumps _spawn_generation
+        # each generation; goal poses are then drawn per scenario (env % _crn_repeats). 0 -> inactive.
+        self._crn_repeats = 0
+        self._spawn_generation = 0
+        self._crn_gen_cached = -1
+        self._crn_tab: dict = {}
 
         # motor model
         # experimentally obtained
@@ -258,7 +267,18 @@ class MARLHoverRandEnv(DirectMARLEnv):
         n = len(env_ids)
 
         # [0,1]^2 per rope -> (arc position s, z). per-env: one sample/env; per-run: one shared.
-        if per_env:
+        slots = getattr(self.cfg, "attachment_condition_slots", None)
+        if per_env and slots is not None:
+            # condition-slot sharing (ES): envs with equal slot ids get IDENTICAL attachment draws, so the
+            # trainer can pair-match antithetic ES members (and the baseline/center slots) — attachment
+            # differences then cancel out of within-pair fitness comparisons.
+            slots = list(slots)
+            assert len(slots) >= n, f"attachment_condition_slots has {len(slots)} entries for {n} envs"
+            uniq = sorted(set(slots[:n]))
+            u_by_slot = {s: rng.uniform(0.0, 1.0, size=(3, 2)) for s in uniq}
+            u = np.stack([u_by_slot[slots[k]] for k in range(n)])
+            print(f"[hover_rand] attachment condition slots: {len(uniq)} distinct draws over {n} envs")
+        elif per_env:
             u = rng.uniform(0.0, 1.0, size=(n, 3, 2))
         else:
             u = np.broadcast_to(rng.uniform(0.0, 1.0, size=(3, 2)), (n, 3, 2))
@@ -385,6 +405,7 @@ class MARLHoverRandEnv(DirectMARLEnv):
                 target_rpm = self._indi_controllers[i].getCommand(
                     drone_states, self._forces[:, i * 4 : i * 4 + 4], alpha_cmd, acc_cmd, acc_load
                 )
+                self._indi_residual[:, i] = self._indi_controllers[i].disturbance_residual
 
                 # target_rpm = self._indi_controllers[i].getCommand(
                 #     drone_states, self._forces[:, i * 4 : i * 4 + 4], self._setpoints[f"falcon{i+1}"])
@@ -471,6 +492,10 @@ class MARLHoverRandEnv(DirectMARLEnv):
                 dim=-1,
             )
 
+            if self.cfg.actor_indi_residual:
+                obs_falcon1_t = torch.nan_to_num(
+                    torch.cat((obs_falcon1_t, self._indi_residual[:, 0]), dim=-1), nan=0.0, posinf=0.0, neginf=0.0
+                )
             self._observation_buffers["falcon1"].append(obs_falcon1_t)
 
             obs_falcon2_t = torch.cat(
@@ -490,6 +515,10 @@ class MARLHoverRandEnv(DirectMARLEnv):
                 dim=-1,
             )
 
+            if self.cfg.actor_indi_residual:
+                obs_falcon2_t = torch.nan_to_num(
+                    torch.cat((obs_falcon2_t, self._indi_residual[:, 1]), dim=-1), nan=0.0, posinf=0.0, neginf=0.0
+                )
             self._observation_buffers["falcon2"].append(obs_falcon2_t)
 
             obs_falcon3_t = torch.cat(
@@ -509,6 +538,10 @@ class MARLHoverRandEnv(DirectMARLEnv):
                 dim=-1,
             )
 
+            if self.cfg.actor_indi_residual:
+                obs_falcon3_t = torch.nan_to_num(
+                    torch.cat((obs_falcon3_t, self._indi_residual[:, 2]), dim=-1), nan=0.0, posinf=0.0, neginf=0.0
+                )
             self._observation_buffers["falcon3"].append(obs_falcon3_t)
 
             obs_falcon1 = self._observation_buffers["falcon1"].buffer.reshape(self.num_envs, -1)
@@ -809,6 +842,31 @@ class MARLHoverRandEnv(DirectMARLEnv):
             self.cfg.goal_range = self.cfg.goal_range_hard
 
     def _reset_target_pose(self, env_ids):
+        # CRN (cfg.crn, ES only): draw the goal pose per scenario (env % _crn_repeats) from a table redrawn
+        # once per generation, so all genomes in a generation face identical goal conditions. Standardized
+        # u ~ U[0,1) is stored; the goal_range mapping is applied at use so a range curriculum still works.
+        if getattr(self.cfg, "crn", False) and self._crn_repeats > 0:
+            if self._crn_gen_cached != int(self._spawn_generation):
+                g = torch.Generator(device=self.device)
+                g.manual_seed(int(getattr(self.cfg, "crn_seed", 0)) * 1_000_003 + int(self._spawn_generation))
+                self._crn_tab = {"goal": torch.rand(self._crn_repeats, 6, generator=g, device=self.device)}
+                self._crn_gen_cached = int(self._spawn_generation)
+            ids = torch.as_tensor(env_ids, device=self.device, dtype=torch.long)
+            u = self._crn_tab["goal"][ids % self._crn_repeats]
+
+            def _U(col, lo, hi):
+                return lo + (hi - lo) * u[:, col]
+
+            self.pose_command_w[env_ids, 0] = _U(0, *self.cfg.goal_range["pos_x"])
+            self.pose_command_w[env_ids, 1] = _U(1, *self.cfg.goal_range["pos_y"])
+            self.pose_command_w[env_ids, 2] = _U(2, *self.cfg.goal_range["pos_z"])
+            euler_angles = torch.zeros_like(self.pose_command_w[env_ids, :3])
+            euler_angles[:, 0] = _U(3, *self.cfg.goal_range["roll"])
+            euler_angles[:, 1] = _U(4, *self.cfg.goal_range["pitch"])
+            euler_angles[:, 2] = _U(5, *self.cfg.goal_range["yaw"])
+            quat = quat_from_euler_xyz(euler_angles[:, 0], euler_angles[:, 1], euler_angles[:, 2])
+            self.pose_command_w[env_ids, 3:] = quat_unique(quat) if self.cfg.make_quat_unique_command else quat
+            return
         # reset goal rotation
         r = torch.empty(len(env_ids), device=self.device)
         self.pose_command_w[env_ids, 0] = r.uniform_(*self.cfg.goal_range["pos_x"])

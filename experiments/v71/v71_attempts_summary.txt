@@ -1,0 +1,8 @@
+==================== RSL_RL LSTM ROLLOUT ====================
+ checkpoint        : experiments/v71/model_19999.pt
+ steps / frames    : 6000 / 2000
+ catches / detaches: 2 / 0
+ min hook<->bar (m): 0.015   (capture radius 0.05)
+ attached steps    : 2426 / 6000
+ success (held)    : False
+============================================================

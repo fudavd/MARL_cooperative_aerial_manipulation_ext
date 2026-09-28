@@ -261,6 +261,23 @@ class MARLHoverRandEnvCfg(DirectMARLEnvCfg):
         "rope_3": (1.15, 1.30, 0.09, 0.14),
     }
 
+    # --- attach->transport hand-off experiment (evolve_head_transport.py; all default-off) ----------
+    # Append the 6-dim INDI disturbance-residual to each drone's obs frame (45 -> 51 per frame), matching
+    # the hook-grasp actor layout so the v74 attach policy (51 x H3 = 153) can run on this env unchanged.
+    # The per-frame base layout is ALREADY identical to the hook env's _drone_obs_frame by design (the
+    # wall-centre directive replaces the ego one-hot in both).
+    actor_indi_residual: bool = False
+    # Common random numbers for ES: goal poses are drawn per scenario (env % _crn_repeats) from a table
+    # redrawn each generation (trainer sets env._crn_repeats and bumps env._spawn_generation), so every
+    # genome in a generation faces identical goal conditions. Inactive for PPO/eval (default off).
+    crn: bool = False
+    crn_seed: int = 0
+    # Per-env attachment DR condition sharing: list[int] of a condition-slot id per env. Envs with equal
+    # slot ids receive IDENTICAL attachment draws (the ES trainer pair-matches antithetic members and the
+    # baseline/center slots so attachment differences cancel out of fitness comparisons). None = every env
+    # draws its own attachment (unchanged default).
+    attachment_condition_slots = None
+
     # scene
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1, env_spacing=8.0, replicate_physics=True)
 

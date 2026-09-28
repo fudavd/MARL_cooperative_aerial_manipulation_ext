@@ -1,0 +1,14 @@
+{
+  "arm": "hook-blind",
+  "checkpoint": "logs/rsl_rl/v63a_swing_blind/2026-07-24_14-55-22_v63a_swing_blind/model_4999.pt",
+  "num_envs": 256,
+  "steps": 2000,
+  "planarity": 0.7811,
+  "aim_deg": 0.55,
+  "whirl_sin": 0.5222,
+  "lz_abs": 0.2068,
+  "swing_amp": 0.6309,
+  "amp_along": 0.3286,
+  "amp_off": 0.1134,
+  "swing_frac": 0.9714
+}
