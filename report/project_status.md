@@ -29,7 +29,7 @@ head and the switching test in the sequence env.
 | D | Adaptive layer: static controls | nobody | none of protocol rows 1-3 (static shared head, static GRU, oracle) exist on the construction plant. | without them no adaptivity number is interpretable (H1, H2). | after B exists: train rows 1-3 on the transport task with mass / CoM / size randomised; oracle = hidden variables appended to the frame. |
 | E | Adaptive layer: plastic head, within-task | nobody on the contract plant | offline switching heads (IPA / activity) work on imitation bodies; eta_bound now enforced. Probes: mass is the hidden variable (linear R^2 0.2, residual only); attached flag and attachment x/y are frame-visible. | targets must be mass / CoM / inertia, not the switch. | after D: rows 5-6 (frozen vs on) on the train / test splits of the protocol. |
 | F | Chain and switching | nobody | sequence env exists (teleport cycles, bookkeeping); no policy has run it. | needs A + B. | method 7 (wrong-start) vs static in the sequence env; time to switch. |
-| G | Task distribution | -6d / -c5 | mass randomised; CoM offset and box size supported in cfg but off in the current run. | adding them mid-run changes the curriculum. | add CoM / size at the next restart of A or in B from the start (protocol section 2 splits). |
+| G | Task distribution | -6d / -c5 | mass randomised (0.9-1.9 kg); box_size_dr ON with the user's narrowed range (half_xy 0.32-0.36, half_z 0.20-0.25); CoM offset off (com_offset_range 0). | changing them mid-run changes the curriculum. | at the next restart of A, or in B from the start: add the CoM offset and widen the size range to the protocol section 2 splits. |
 | H | Hygiene | -c5 / user | skrl fork a65eae6 **not pushed** (classifier blocks me). Hook-grasp env has the reset fix (a3666bc) but no reset test. Demos predate the fixes. | - | user: `cd thirdparty/skrl && git push`. -c5: port the reset check to flycrane_hook; re-collect demos after A's next checkpoint. |
 
 ## 3. Critical path (ordered; each step gates the next)
@@ -60,7 +60,7 @@ is the data (step 2) and the controls (step 3), not the algorithms.
   "the plastic head keeps the correct load compensation across the switch" (the hidden load each drone carries
   changes at the catch and at lift-off), tested as method 7 vs static. Needs your confirmation before E / F
   are designed.
-- **D4. CoM offset and box size in the task distribution** from the next restart of A (G).
+- **D4. Add the CoM offset and widen the box-size range** to the protocol splits from the next restart of A (G); box size DR is already on with a narrowed range.
 
 ## 5. Risks
 
