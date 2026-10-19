@@ -6,3 +6,7 @@
 	path = projects/flycrane-hook-grasp
 	url = git@github.com:fudavd/flycrane-hook-grasp.git
 	branch = dev
+[submodule "projects/flycrane-meta"]
+	path = projects/flycrane-meta
+	url = git@github.com:fudavd/flycrane-meta.git
+	branch = dev
