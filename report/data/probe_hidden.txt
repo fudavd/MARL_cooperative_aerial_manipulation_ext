@@ -1,0 +1,24 @@
+== /home/fuda/PycharmProjects/MARL_cooperative_aerial_manipulation_ext/projects/flycrane-meta/logs/demos/switch_hook.pt: obs (64, 1400, 8, 153), train groups 44, test groups 20
+   positive rate 0.092
+   1 frame (51)                             linear {'bal_acc': 0.7255618572235107, 'acc': 0.675113320350647}  mlp {'bal_acc': 0.9520481824874878, 'acc': 0.974786639213562}  (18 s)
+   3 frames (153)                           linear {'bal_acc': 0.7373782992362976, 'acc': 0.690226674079895}  mlp {'bal_acc': 0.9395723342895508, 'acc': 0.9701200127601624}  (30 s)
+   3 frames, no INDI residual               linear {'bal_acc': 0.7322166562080383, 'acc': 0.6832666397094727}  mlp {'bal_acc': 0.9374451637268066, 'acc': 0.9725733399391174}  (22 s)
+   3 frames, INDI residual only             linear {'bal_acc': 0.5166595578193665, 'acc': 0.5862399935722351}  mlp {'bal_acc': 0.7521581649780273, 'acc': 0.8372600078582764}  (20 s)
+   10 stored frames = 20 steps (510)        linear {'bal_acc': 0.8456193208694458, 'acc': 0.8477799892425537}  mlp {'bal_acc': 0.964067816734314, 'acc': 0.9753533601760864}  (18 s)
+   20 steps, INDI residual only (60)        linear {'bal_acc': 0.5342986583709717, 'acc': 0.5819733142852783}  mlp {'bal_acc': 0.9261218309402466, 'acc': 0.9532999992370605}  (19 s)
+== /home/fuda/PycharmProjects/MARL_cooperative_aerial_manipulation_ext/projects/flycrane-meta/logs/demos/variant_transport.pt: obs (64, 1400, 12, 153), train groups 44, test groups 20
+   target std [0.2935]
+   1 frame (51)                             linear {'r2': [0.211], 'r2_mean': 0.21106255054473877}  mlp {'r2': [-0.479], 'r2_mean': -0.47915804386138916}  (17 s)
+   3 frames (153)                           linear {'r2': [0.202], 'r2_mean': 0.20229649543762207}  mlp {'r2': [-0.418], 'r2_mean': -0.41773152351379395}  (26 s)
+   3 frames, no INDI residual               linear {'r2': [0.006], 'r2_mean': 0.005584239959716797}  mlp {'r2': [-0.716], 'r2_mean': -0.7157658338546753}  (22 s)
+   3 frames, INDI residual only             linear {'r2': [0.143], 'r2_mean': 0.14306539297103882}  mlp {'r2': [0.131], 'r2_mean': 0.1306484341621399}  (16 s)
+   10 stored frames = 20 steps (510)        linear {'r2': [0.233], 'r2_mean': 0.23344779014587402}  mlp {'r2': [-0.429], 'r2_mean': -0.42908525466918945}  (22 s)
+   20 steps, INDI residual only (60)        linear {'r2': [0.145], 'r2_mean': 0.14480870962142944}  mlp {'r2': [0.095], 'r2_mean': 0.09502571821212769}  (25 s)
+== /home/fuda/PycharmProjects/MARL_cooperative_aerial_manipulation_ext/projects/flycrane-meta/logs/demos/variant_transport.pt: obs (64, 1400, 12, 153), train groups 44, test groups 20
+   target std [0.2205, 0.1953, 0.0341]
+   1 frame (51)                             linear {'r2': [0.112, 0.065, -0.033], 'r2_mean': 0.048157017678022385}  mlp {'r2': [0.954, 0.942, 0.121], 'r2_mean': 0.6722111105918884}  (17 s)
+   3 frames (153)                           linear {'r2': [0.101, 0.064, -0.094], 'r2_mean': 0.02340356633067131}  mlp {'r2': [0.953, 0.953, 0.071], 'r2_mean': 0.6589987277984619}  (28 s)
+   3 frames, no INDI residual               linear {'r2': [0.11, 0.047, -0.056], 'r2_mean': 0.03353498503565788}  mlp {'r2': [0.937, 0.939, 0.085], 'r2_mean': 0.6533017158508301}  (17 s)
+   3 frames, INDI residual only             linear {'r2': [0.038, 0.006, -0.055], 'r2_mean': -0.0039070844650268555}  mlp {'r2': [0.061, 0.033, -0.067], 'r2_mean': 0.009206275455653667}  (20 s)
+   10 stored frames = 20 steps (510)        linear {'r2': [0.09, 0.05, -0.231], 'r2_mean': -0.030332308262586594}  mlp {'r2': [0.953, 0.956, 0.053], 'r2_mean': 0.6537326574325562}  (21 s)
+   20 steps, INDI residual only (60)        linear {'r2': [0.039, 0.005, -0.1], 'r2_mean': -0.018694302067160606}  mlp {'r2': [0.062, 0.022, -0.065], 'r2_mean': 0.006341596599668264}  (20 s)

@@ -1,0 +1,6 @@
+mass |   20 control steps | residual only          | linear R2 0.148  (n_test 120000)
+mass |   20 control steps | residual + own state   | linear R2 0.130  (n_test 120000)
+mass |   50 control steps | residual only          | linear R2 0.144  (n_test 120000)
+mass |   50 control steps | residual + own state   | linear R2 0.121  (n_test 120000)
+mass |  100 control steps | residual only          | linear R2 0.148  (n_test 120000)
+mass |  100 control steps | residual + own state   | linear R2 0.101  (n_test 120000)
