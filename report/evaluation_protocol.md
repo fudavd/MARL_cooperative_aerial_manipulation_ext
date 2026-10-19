@@ -1,6 +1,6 @@
 # Evaluation protocol for the adaptive hook-and-transport chain
 
-Status: draft v1, 2026-10-19 (session skrl-01). Scope: every claim the project will make about the N-drone
+Status: draft v1.1, 2026-10-19 (session skrl-01). Scope: every claim the project will make about the N-drone
 hooking skill, the cooperative transport skill, the within-task adaptivity of the Hebbian layer and the
 hook -> transport switch. Each later run should fill one row of the tables in section 5; a number that is not a
 row of these tables is a diagnostic, not a result.
@@ -42,9 +42,15 @@ hooked starts).
 | behaviour | success per episode | secondary metrics |
 |---|---|---|
 | hooking (per drone) | hook attached and wire taut for 100 consecutive control steps (1 s), before time-out, with the box not moved (virtual-box risk < 1 throughout) | catch rate, steps to catch, drops per catch, over-box fraction |
-| joint hold (team) | all N drones attached, each pull <= 0.4 x box weight, for 100 consecutive steps | time from first to last catch, collisions |
+| joint hold (team) | all N drones attached, every wire taut, virtual-box risk < 1 (the box does not slide; dynamic friction) for 100 consecutive steps | time to the 1st / 2nd / 3rd catch, wire tension / box weight quantiles (pin force minus hook weight), collisions |
 | transport (team) | box within 0.10 m and 0.35 rad of the target, held 50 steps, all hooks attached | position / orientation error, survival |
 | chain (team) | hooking success for all drones, then transport success, within one 120 s episode, no reset in between | time to switch (last catch -> first lift), cycles per episode |
+
+Revision 2026-10-19 (v1.1): the joint-hold row originally capped each pull at 0.4 x box weight. The measured pin
+force includes the 0.30 kg hook (2.94 N = 0.30 x the weight of a 1 kg box) and a wire goes slack, and the hook
+detaches, below about 4 N, so that cap was unreachable (0 % at it 30k with wire pull / weight q10/50/90 =
+0.36 / 0.71 / 0.84). The cap was a proxy for "the box is not dragged"; the virtual-box risk measures that
+directly, so it replaces the cap. Tension is reported, not thresholded.
 
 Deterministic actions (policy mean) at evaluation; stochastic only when explicitly marked. Report mean and
 standard deviation over the 3 training seeds, never a best-of-N checkpoint. Checkpoint = last, not best.
