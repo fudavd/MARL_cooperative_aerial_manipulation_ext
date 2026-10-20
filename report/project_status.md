@@ -112,12 +112,13 @@ Points (3-drone unless stated; "protocol" = joint hold v1.1 share of episodes):
 - seed 2 fs2_2000 (it ~3k at 2026-10-20 09:00): 3-drone 0 catches / 140 eps, fly_low 29, blowup 7; single 0 catches, fly_low 2. Curriculum progress 0.00 (radius 0.13), training success 0.26-0.27 at step 72k (adapt_up 0.5 not yet met). ~24 ctrl steps / it and ~600 it / h as s1; collision onset (900k) at ~it 37.5k, roughly 57 h away. No s1 reference before 30k (s1 tracking started there); fs2_4000 next.
 - legacy f3_40000 (2026-10-20, D8 point 1 of 2): catch skill did NOT climb. 3-drone 112 catches (38k: 164), 2nd / 3rd attach reached 16 / 3.1 %, protocol 0 (38k: 0.008), risk > 1 at exactly two attached 0.339 (38k: 0.023). Single 48 / 164, protocol 0.268. Per-dwell catch 38k -> 40k: single 6.6 -> 4.5 %, n0 3.9 -> 3.0, n1 2.4 -> 1.2, n2 0 / 92 -> 3 / 61. Swing-out share of n0 misses 78 -> 93 %; draw-lost count 236 -> 81 with p_max q50 up to ~0.38 (contacts passing all gates draw better, fewer pass the swing-out gate). NEW: the adaptive curriculum oscillates, it does not stay at the final 5 cm radius: progress hit 1.0 at ~904k steps, train catch success fell to 0.16-0.24, backed off to 0.55 (radius 0.086 m) by 944k, now climbing again (0.70-0.80, radius 0.066-0.074, success 0.53); earlier 0.85 -> 0.75 -> 1.0 cycles too. The 32k..40k tracker catch series 55 / 121 / 76 / 164 / 112 lines up with the cycle: the policy has not consolidated the swing-out skill at the final radius. ssf_4000 per-dwell for comparison: n0 1.1 %, n1 1.0 %, n2 2.3 %, swing-out share 80-85 %.
 
-## 8. Compute on izar (squeue 2026-10-20, read-only)
+## 8. Compute on izar (squeue 2026-10-20 ~09:30, read-only; all 12 long jobs alive)
 
 | stream | running | queued (dependency) |
 |---|---|---|
 | A hooking (-6d) | 3223831 legacy s1, 3223927 its tracker; 3224488 legacy s2, 3224490 tracker; 3224394 simple+floor, 3224396 tracker | 3223832, 3224489, 3224395 follow-ups |
-| C evo / ES (-0f) | 3223562 es17_teach, 3223586 es17_headx4 (end ~2026-10-21); 3223958 es18_p512r8, 3224066 es18_th003 (theta_init_std 0.3 / 0.03); 3223972 mappo_v13_basket (16 h limit) | 3223909 eval_v17_final, 3223973 es19_basket |
+| debug (-6d / -0f, done today) | 3224388 floorchk, 3224505 / 3224508 third38, 3224513 nearmiss38, 3224522 eval_teacher, 3224525 sep40 (all COMPLETED, 14-30 min); 3224529 sep40q smoke test running | |
+| C evo / ES (-0f) | 3223562 es17_teach, 3223586 es17_headx4 (end ~2026-10-21); 3223958 es18_p512r8, 3224066 es18_th003 (theta_init_std 0.3 / 0.03); 3223972 mappo_v13_basket (16 h limit); 3224523 es19_basket (started 06:33) | 3223909 eval_v17_final |
 
 11 GPU jobs running. The es18 / es19 / mappo_v13_basket runs were launched by -0f on the user's explicit instructions (confirmed, quotes on file in -0f). All on the evo hover_rand plant, obs 45 (drone 33 + a 12-dim pose latched at episode start), 1 frame:
 
