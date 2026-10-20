@@ -108,3 +108,12 @@ Points (3-drone unless stated; "protocol" = joint hold v1.1 share of episodes):
 - scratch + floor ssf_2000: single 1, 3-drone 0, fly_low 7, floor -0.1 / episode.
 - **scratch + floor ssf_4000 (2026-10-20): 3-drone 113 catches / 131 eps, k-attached share [0.67, 0.27, 0.065, 0.0008], protocol 0.031 (4 / 131, above legacy 38k), fly_low 21; single 55 / 162, protocol 0.302.** Caveats: one seed, 4 protocol episodes, hold +141 vs catch +14 per episode (the pattern before the fine-tune collapse), floor -0.3 (barely engaged). Watch ssf_6000 / 8000.
 - seed 2 fs2_1000: early from-scratch chaos (3-drone fly_low 135, blowup 38 over 216 eps); no s1 reference at this stage.
+
+## 8. Compute on izar (squeue 2026-10-20, read-only)
+
+| stream | running | queued (dependency) |
+|---|---|---|
+| A hooking (-6d) | 3223831 legacy s1, 3223927 its tracker; 3224488 legacy s2, 3224490 tracker; 3224394 simple+floor, 3224396 tracker | 3223832, 3224489, 3224395 follow-ups |
+| C evo / ES (-0f) | 3223562 es17_teach, 3223586 es17_headx4 (end ~2026-10-21); 3223958 es18_p512r8, 3224066 es18_th003 (theta_init_std 0.3 / 0.03); 3223972 mappo_v13_basket (16 h limit) | 3223909 eval_v17_final, 3223973 es19_basket |
+
+11 GPU jobs running. The es18 / es19 / mappo_v13_basket runs were launched by -0f after our "no further ES on the 45-dim obs without the user" agreement; -0f asked to confirm they were user-instructed and to describe them (obs incl. actor_extra = basket_init_pose, plant, fitness, question answered). mappo_v13_basket may be a MAPPO teacher that sees the basket pose: if so it is the nearest thing to the D1 transport teacher and gets a protocol transport eval when it ends.
