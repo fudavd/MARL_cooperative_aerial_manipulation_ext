@@ -195,6 +195,16 @@ Points (3-drone unless stated; "protocol" = joint hold v1.1 share of episodes):
 | P1 | - | 1 | 1 | 0 | 0 | 0 | 2 | 7 | 49 @ 590M |
 
   **Sample-matched, P1 is the SLOWEST arm that catches and R0 the fastest of ours** (ref 39 at 75M; R0 19 at 100M; P0 6 at 125M; P1 7 at 400M). The legacy recipe works by brute data, not by a better update; the lr arm (P0 + P1's lr schedule at 512 envs, the only change) is drafted after T1 is submitted and needs the user's go. **Fresh three-drone run all_s1 (3224628) at it ~8.4k (curriculum step 202k): progress 0.00 the whole run, radius still 0.13 m; free-start catch success at 0.13 m 0.15 -> 0.26 (window mean 0.21-0.25, needs 0.5 to advance; adapt_up 0.5 / adapt_down 0.2 / window 5 / decisions every 2000 steps / min 200 episodes); std 1.06 -> 1.25 -> 1.19; 3.2-3.8 s / it; collision ramp from 300k (~it 12.8k); final-gate tracker evals only at 1k (0-1 catches).** Supports D16: the run is learning slowly at the easiest radius under the P4 condition.
+- **Exact 0.40 m survival eval (item 7, user go; -6d; jobs 3225160 / 3225161, /work/lis/vandigge/results_surv040/surv040.jsonl): almost no episode reaches all three attached in any row; v84r2 x3 is limited by crowding, f3_42000 by its catch rate.** Three drones, f3_3drone cfg, collision_dist 0.40, final gates, hold 1 s, 64 envs x 8000 steps:
+
+| row | episodes | catches | held / catch | all attached | all attached, no pair < 0.40 | episodes with a pair < 0.40 | protocol |
+|---|---|---|---|---|---|---|---|
+| v84r2 x3, no collision | 159 | 266 | 0.46 | 0.019 | 0.013 | 0.90 | 0 |
+| v84r2 x3, collision 0.40 | 657 | 291 | 0.47 | 0.003 | 0.003 | - | 0 |
+| f3 it_42000, no collision | 128 | 61 | 1.00 | 0 | 0 | 0.12 | 0 |
+| f3 it_42000, collision 0.40 | 131 | 64 | 0.97 | 0 | 0 | - | 0 |
+
+  v84r2: catches most but 90 % of episodes have a pair closer than 0.40 m at some point; under the rule episodes are 4x shorter and all-attached falls to 0.3 %; 604 collisions = 594 adjacent pairs + 10 opposite, only 41 involving an attached drone; drones over the box footprint 699 times (median outward-from-face -0.36 m: it flies over the box onto neighbouring faces); holds weak (46 % held 1 s). f3_42000: spacing fine (12 % of episodes below 0.40 m, the rule costs nothing), holds 97-100 %, but never all three attached (max 2 at once, in 12-25k of ~500k steps): catch rate ~0.5 / episode is the binding constraint. **Reading: for our line the joint-hold bottleneck is the single-drone catch rate under the final gates (= the D10 / D15 parity work); the collision rule bites v84-style policies, not f3. The earlier Z3 row (3224576: 61 % reach all attached without collision) was at a different gate / threshold set; this exact-0.40 row supersedes it for the D9 question.**
 
 ## 8. Compute on izar (squeue 2026-10-20 ~11:40, read-only; 16 running, 7 queued follow-ups; mappo_v13_basket 3223972 ended at its 16 h limit)
 
