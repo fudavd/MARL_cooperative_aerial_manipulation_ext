@@ -383,3 +383,32 @@ with this policy. Both are decisions for the user, not defects.
   session 00 and the transport policy from session 09 can actually be chained.
 * Nobody owns the hook-grasp controller-reset port, the stale READMEs, or the flycrane-meta eval scripts
   (`eval_adapt`, `eval_sequence`, `eta_bound`). These need an owner.
+
+## 2026-10-20 — flycrane-meta trainer and hook-reward port review (gate for the D10 hook ablation)
+
+Scope: `flycrane_meta/trainer.py`, `algo/meta.py`, `rollout.py`, `models.py`, `config.py`, `envs/families.py`,
+`envs/construction.py` (`_rewards_legacy`, `_update_attachment`, `_closest_bar_point`), `envs/construction_cfg.py`,
+the legacy run's `izar_v84freshd.sbatch`, and the rsl_rl v84 recipe (`flycrane-hook-grasp` `rsl_rl_ppo_cfg.py`,
+`marl_hook_env.py`, `marl_hook_env_cfg.py`). Read-only; nothing committed to the submodules by the PM.
+
+**PPO implementation (multitask variant): correct as far as read.** GAE with rsl_rl's time-out bootstrap
+(`r += gamma V(s) * trunc`, done masks the next value), global advantage normalisation, PPO clip on the concatenated
+support + query batch, adaptive-KL learning rate per minibatch with the same 1.5x rule and 1e-5 / 1e-2 clamps,
+entropy on the log-std (same gradient as rsl_rl), gradient clip 1.0 on the shared parameters, log-std clamp, actor
+observation normaliser frozen within an iteration and merged from all data afterwards, separate critic on the
+privileged state trained after the policy step (MSE, no value clipping). No bug found.
+
+**Legacy hooking arm hyperparameters are not v84's** (sbatch): cosine lr 5e-5 -> 5e-6 (rsl_rl adaptive from 1e-3),
+AdamW wd 0.01 (Adam, none), entropy 0 with a scheduled std 0.6 -> 0.2 pinned since it 12k (learned std from 1.0,
+entropy 0.004), 16 task minibatches (4), critic 512 x 512 + warm-up 100 (256 x 256, none), 4096 envs x 24 steps
+(512 x 24). These came with the two-family std-explosion fixes and were inherited by the hooking arms.
+
+**Reward port** (term-by-term formula diff, subagent, verified in code): all shared hook-phase terms and the
+attachment gate compute the same expressions. Deviations to fix in the parity staging: (1) reward target z = band
+middle (0.12 m above the base) vs v84's wall centre 0.16 m (`construction.py:172-175, 619` vs
+`marl_hook_env.py:163-167, 586`); (2) `_update_attachment()` runs in `_get_observations` while Isaac steps
+dones -> rewards -> reset -> observations and `_get_dones` refreshes kinematics, so rewards see post-step kinematics
+with one-step-stale attachment flags (`construction.py:510, 844`; `direct_marl_env.py:381-396`); (3)
+`bar_lateral_frac` default 0.4 vs v84's full face (the legacy single plant already used 1.0). Residuals accepted:
+above_box gated by unattached, repeatable hold milestone, one curriculum clock, critic form, spawn distribution.
+The v84 regulariser port by -6d (uncommitted at review time) matches `marl_hook_env.py:700-754` for one drone.
