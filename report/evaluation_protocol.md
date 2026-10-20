@@ -55,6 +55,11 @@ directly, so it replaces the cap. Tension is reported, not thresholded.
 Deterministic actions (policy mean) at evaluation; stochastic only when explicitly marked. Report mean and
 standard deviation over the 3 training seeds, never a best-of-N checkpoint. Checkpoint = last, not best.
 
+Proposed revision v1.2 (2026-10-20, pending the user): the joint-hold row is measured WITH drone-drone collision termination
+on (the deployment condition of the sequence env; radius per decision D9 in project_status.md). The stream-A tracker rows up
+to it 40k were evaluated with --no_collision; a with-collision row on it_40000 (job 3224525) gave the same 0 protocol holds
+and 22 % collision terminations. Reported tables must state the condition until the tracker carries both rows.
+
 ## 4. Methods to compare
 
 Every adaptivity claim is a difference between rows of this list on the same cells. Rows 1-3 are static
