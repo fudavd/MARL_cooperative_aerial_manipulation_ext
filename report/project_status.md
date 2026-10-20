@@ -36,6 +36,10 @@ head and the switching test in the sequence env.
 
 1. **Joint hold from free starts** (A). Gate: protocol joint hold v1.1 (all attached, wires taut, vbox risk < 1, 100 steps)
    in >= 10 % of free-start episodes at final curriculum settings, deterministic, 3 evaluation seeds.
+   Sub-gate found 2026-10-20: the single-drone catch on the construction plant (0.30-0.45 per episode at the final rule)
+   is far below the v84r2 release recipe (0.91), so the joint hold is limited by catch skill before team effects;
+   D10 parity test (V- / T-ladder, eval only) localizes the cause; the gate is measured WITH collision termination
+   from the next tracker edit on (D9), and the adaptive catch curriculum gets hysteresis at the next restart (D8 v).
 2. **Transport teacher on the construction plant, 51x3** (B). Gate: protocol transport success (0.10 m /
    0.35 rad held 50 steps, all attached) >= 80 % from attached starts on the train split of mass. This is the
    step with no owner and no code today; it is the longest pole after A.
