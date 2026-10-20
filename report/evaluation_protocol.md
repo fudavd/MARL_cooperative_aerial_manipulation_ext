@@ -1,6 +1,6 @@
 # Evaluation protocol for the adaptive hook-and-transport chain
 
-Status: draft v1.1, 2026-10-19 (session skrl-01). Scope: every claim the project will make about the N-drone
+Status: v1.2, 2026-10-20 (v1.1 draft 2026-10-19, session skrl-01; v1.2 approved by the user 2026-10-20 evening). Scope: every claim the project will make about the N-drone
 hooking skill, the cooperative transport skill, the within-task adaptivity of the Hebbian layer and the
 hook -> transport switch. Each later run should fill one row of the tables in section 5; a number that is not a
 row of these tables is a diagnostic, not a result.
@@ -55,10 +55,11 @@ directly, so it replaces the cap. Tension is reported, not thresholded.
 Deterministic actions (policy mean) at evaluation; stochastic only when explicitly marked. Report mean and
 standard deviation over the 3 training seeds, never a best-of-N checkpoint. Checkpoint = last, not best.
 
-Proposed revision v1.2 (2026-10-20, pending the user): the joint-hold row is measured WITH drone-drone collision termination
+Revision v1.2 (2026-10-20, APPROVED by the user): the joint-hold row is measured WITH drone-drone collision termination
 on (the deployment condition of the sequence env; radius per decision D9 in project_status.md). The stream-A tracker rows up
 to it 40k were evaluated with --no_collision; a with-collision row on it_40000 (job 3224525) gave the same 0 protocol holds
-and 22 % collision terminations. Reported tables must state the condition until the tracker carries both rows.
+and 22 % collision terminations. Reported tables must state the condition until the tracker carries both rows. From v1.2 the
+with-collision row is the protocol number; a --no_collision row may be reported next to it as a diagnostic only.
 
 ## 4. Methods to compare
 
