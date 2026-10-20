@@ -40,6 +40,8 @@ head and the switching test in the sequence env.
    is far below the v84r2 release recipe (0.91), so the joint hold is limited by catch skill before team effects;
    D10 parity test (V- / T-ladder, eval only) showed the cause is the training side, not the env (v84r2 0.87 vs ours 0.28 in the same physics); the gate is measured WITH collision termination
    from the next tracker edit on (D9), and the adaptive catch curriculum gets hysteresis at the next restart (D8 v).
+**Proposed revision (PM, 2026-10-20, pending the user's D10 stage-2 decision):** replace 'joint hold by from-scratch RL' with a teacher route mirroring D1a: (1a) distil v84r2 into a 51x3 base-ref student on the construction single plant (runbook under D10, gate catch >= 0.80 / 1 s hold >= 0.75); (1b) RL fine-tune that student with the meta trainer on the three-drone plant via --init_checkpoint for the team effects (hold duration, collision avoidance at the D9 radius), with the curriculum starting at the final rule (no catch curriculum needed, which also removes the D8 cycling) and the five-term reward; gate unchanged (protocol joint hold >= 10 %, measured WITH collision termination). The running legacy / scratch arms continue as the baseline until (1b) is measured. 3224576 (v84r2 x3 zero-shot in the three-drone plant) tells how far (1b) has to go.
+
 2. **Transport teacher on the construction plant, 51x3** (B). Gate: protocol transport success (0.10 m /
    0.35 rad held 50 steps, all attached) >= 80 % from attached starts on the train split of mass. This is the
    step with no owner and no code today; it is the longest pole after A.
