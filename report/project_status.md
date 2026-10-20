@@ -49,7 +49,7 @@ is the data (step 2) and the controls (step 3), not the algorithms.
 
 ## 4. Decisions needed from the user
 
-- **D1. Who builds the 51x3 transport teacher on the construction plant, and when.** Options: (a) the evo session
+- **D1 is now two halves (2026-10-20).** **D1a, 51x3 transport student on the hover_rand plant (half a day, -0f's estimate):** the paper-obs teacher's 45-dim frame is slot-for-slot a subset of the 51 frame except the drone-ID one-hot (replaced by the assigned-wall centre) and the INDI residual (new). Option A (recommended by -0f): DAgger distillation in flycrane_meta/envs/transport.py, student 51x3 -> 5 actions (hook actor shape), labels = teacher mean action from env.paper_frames(), MSE, 4096 envs: ~1 h coding + 2-4 h V100 + 15 min protocol eval; expected ~90 % protocol success. Option B: MAPPO retrain on 51x3 with the warm-start recipe, ~14-18 h V100. Pre-checks: action scaling of the hook actor head vs the evo action_scale; history = 51x3 per the user's 2026-10-19 decision to -c5 (supersedes the older history_len 1 instruction). Needs the user's go to -0f. **D1b, transport teacher on the construction plant (sequence.py, box with bars, attached starts, mass / CoM / size DR):** no owner, no estimate yet; the merge waits on it. Original D1 text: Who builds the 51x3 transport teacher on the construction plant, and when. Options: (a) the evo session
   after v17 ends (45 h), using its MAPPO paper recipe; (b) start now on ALC or the free izar slot, in parallel
   with v17; (c) the hooking session after A reaches its gate. My recommendation: (b), owner -0f, since the
   recipe and the person-hours are there and v17 needs only a watcher. The ES / 45-dim track then ends with its
