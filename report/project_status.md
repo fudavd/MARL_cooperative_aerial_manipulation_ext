@@ -118,7 +118,7 @@ Arms (all seed 1 unless stated; cfg = v84fresh_s1's + user params vbox_mu 0.6 / 
 
 | arm | reward | start | izar train / follow-up / tracker | labels | state |
 |---|---|---|---|---|---|
-| v84fresh_s1 (legacy) | legacy | 93bf9cb run, restarted it 31k on 5166973 | 3223831 / 3223832 / 3223927 | f3_ | running, strongest arm |
+| v84fresh_s1 (legacy) | legacy | 93bf9cb run, restarted it 31k on 5166973 | 3223831 / 3223832 / 3223927 | f3_ | running, strongest arm  3223832 COMPLETED 2026-10-21 16:04 (1 d 5 h; final tracker rows pending) |
 | v84fresh_s2 | legacy | scratch, seed 2 (seed replicate) | 3224488 / 3224489 / 3224490 | fs2_ | running since 2026-10-20 |
 | v84simple_ft | simple (b482fea) | it 31k actor + fresh critic | 3223963 / 3223964 / 3223965 | sft_ | STOPPED at 35k (0 catches) |
 | v84simple_s1 | simple | scratch | 3223966 / 3223967 / 3223968 | ss1_ | cancelled at ~2k (floor term) |
@@ -257,7 +257,7 @@ Evo (USER in -0f, last hour): "for now use the old H=1 for warmstart ES residual
 
 | stream | running | queued (dependency) |
 |---|---|---|
-| A hooking (-6d) | 3223832 legacy s1 (home until it ends); 3224626 legacy s2 (/work); 3224395 simple+floor; **3224628 v84fresh_all_s1 (/work; v84-parity trainer + reward fixes + adapt_window 5 + collision 0.40 from 300k)**; one local tracker on the laptop | 3224630 (s1 -> /work), 3224627, 3224629, 3224631 follow-ups |
+| A hooking (-6d) | 3223832 legacy s1 (home until it ends); 3224626 legacy s2 (/work); 3224395 simple+floor; **3224628 v84fresh_all_s1 (/work; v84-parity trainer + reward fixes + adapt_window 5 + collision 0.40 from 300k)**; one local tracker on the laptop | 3224630 (s1 -> /work), 3224627, 3224629, 3224631 follow-ups  3223832 COMPLETED 2026-10-21 16:04 (1 d 5 h; final tracker rows pending) |
 | D10 parity arms (-6d, /work) | 23:05: T1 3225159 + L1 3225162 running (i17, both read at ~11k with no onset); R0 3224820 / P0 3224642 / P0c 3224809 / P3 3224644 / P4 3224645 finished; P1 3224643, P2 3224647 still running; evo: mappo_v17_aid 3225147 + es26_aid 3225148 (afterok) replaced es24_agentid (user-asked, -0f). Earlier: 3224642 P0 v84-parity, 3224643 P1 legacy trainer, 3224644 P3 legacy reward extras, 3224645 P4 today's obs / geometry; 3224647 P2 shared plants (after clean re-smoke 3224641); **3224809 P0c (v84 held starts), 3224820 R0 (rsl_rl trainer bisect)** | |
 | debug (-6d / -0f, done today) | 3224388 floorchk, 3224505 / 3224508 third38, 3224513 nearmiss38, 3224522 eval_teacher, 3224525 sep40 (all COMPLETED, 14-30 min); 3224529 sep40q smoke (done); 3224568 / 3224569 parity ladders (done); 3224576 v84r2 zero-shot in the 3-drone plant (D10 follow-up, eval only; queued until ~11:00, both rows ~1.5 h) | |
 | C evo / ES (-0f) | 3223562 es17_teach, 3223586 es17_headx4 (end ~2026-10-21); 3224523 es19_basket; 3224634 mappo_v15_h3_succ (16 h, /work); 3224637 es23_res_h1_succ (P5, 48 h, /work); smokes 3224632 / 3224633. Ended: 3223958 (cancelled), 3224066 es18_th003 (quota death gen 61), 3223972 mappo_v13_basket (16 h limit) | 3224635 es22_h3_succ + 3224636 es23_res_h3_succ (afterok 3224634), 3224638 eval_v17_final |
