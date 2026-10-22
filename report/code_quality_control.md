@@ -412,3 +412,20 @@ with one-step-stale attachment flags (`construction.py:510, 844`; `direct_marl_e
 `bar_lateral_frac` default 0.4 vs v84's full face (the legacy single plant already used 1.0). Residuals accepted:
 above_box gated by unattached, repeatable hold milestone, one curriculum clock, critic form, spawn distribution.
 The v84 regulariser port by -6d (uncommitted at review time) matches `marl_hook_env.py:700-754` for one drone.
+
+## 2026-10-22 PM review of the D15/D16 trainer commits on flycrane-meta dev (local, unpushed; user asked for a check of -6d's code)
+
+| commit | scope | verdict |
+|---|---|---|
+| da89fc6 | `--single_rollout`, `--flat_minibatches` (T2) | no defect: same minibatch count / size as the task blocks, critic sees the same samples once, normaliser moments counted once |
+| dcdf545 | `--critic_shared_lr`, `--value_clip` (T3) | no defect: rsl_rl's clipped value loss exactly, collection-time values detached |
+| a6392af | `scripts/train_rsl_rl.py` three drones, `--init_checkpoint`, `--final` (D16) | no defect: drone-major rows consistent for obs / actions / rewards / dones / critic; verified empirically later by -6d's probe_align.py (exact) |
+| d644b49 | `--critic_warmup`, `--max_lr` CappedAdam (D16b) | no defect: KL 0 while frozen keeps the adaptive rule idle, cap clamps the rate per minibatch |
+| 85f02c6 | `--gamma` + reward_rates phase / stochastic / event split | no defect; LIVE in D16s 3226754 (fm_d16c md5 900edfcc verified against the blob) |
+| 0467f8e | `--resume_full`, `--init_critic`, `--init_actor_optim` (d16ctl2) | no defect: Adam state copied by name with a 13 = 13 guard, rsl_rl load restores the iteration counter |
+| 3628049 | ego critic layout + one-drone critic lift + `--critic_clip` (D16d) | no defect: column arithmetic checked against `_state` (frame 40 + 36 D), one-hot drop exact, constant columns neutralised; probe |V3 - V_R0| 4.9e-4 |
+| aea6d09 | `--warmup_lr`, `--warmup_vloss` gate, EV log (D16e, never run) | logic correct; `os._exit(3)` skips env.close, acceptable |
+| 56b43d4 | reward_rates `_get_dones` spy (episode ends by drone) | fine |
+| tracker | d16s rows every 2k from 4k | fine |
+
+D16s cfg vs R0's process (the live run): curricula match R0's; `per_drone_credit` was already in R0's cfg; the eye(D) critic tag generalises R0's constant one-hot; `w_sector` 30 is new approach shaping (all_s1 reward); `episode_length_s` 40 with `end_on_hold_success=false` is right because `construction.py:880` ends the episode as a success when the joint hold reaches `joint_hold_steps` (100), the three-drone analogue of R0's end-on-hold. Outcome of the whole D16 line (not code defects): a converged actor collapses within ~1k iterations against any critic not calibrated to the current env's returns; the user closed the fine-tune line on 2026-10-22 (retrain from scratch).
