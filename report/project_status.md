@@ -17,9 +17,15 @@ catches at v84's pace, R0 391 catches at 19k; no flag or code arm of our trainer
 rsl_rl; the fine-tune line from R0 collapsed in every arm (a converged actor with an uncalibrated critic) and
 was closed on the user's direction (retrain from scratch, D16s); the from-scratch three-drone arms reach the bar
 but never learn the swing-out (swung_out gate failed by 98-100 % of dwells vs R0 70 %), and the single-drone
-discriminator D16s1 (2026-10-24) lags R0 the same way, so the cause is in the recipe's env cfg, not multi-drone
-effects; four single-drone ablations (episode terms / geometry / sector / R0 seed 43) are running to name the
-lever (§7); **transport on that plant does not
+discriminator D16s1 (2026-10-24) lagged R0 the same way, and the single-drone ablation ladders (2026-10-24/26)
+named the blockers: the sector penalty (an exploration barrier, the one hard blocker), box-size DR (delays the
+onset), hold_start_end 0.15 (weak) and the episode structure (the last single-drone lever, not adoptable under
+D18; line paused). The three-drone arm d16f (sector off, R0 geometry, hold start 0.0; 3229542) is the FIRST to
+learn the swing-out and catches at 100-146 per tracker row from 24k, reaching two holders in 12-18 % of
+episodes, but it CANNOT reach the joint hold: two holders pull 2-3x the virtual box's slide budget (adjacent and
+opposite pairs alike), and the vbox termination from 41.7k removes the all-three states instead of teaching a
+lighter pull. The user's D19 'pull gently' (per-drone force penalty, safe force 0.3 W, light joint hold) runs as
+d16p 3230954 with d16f as its control; its onset check is at 14k-18k (§7); **transport on that plant does not
 exist** (the meta transport family is the evo hover_rand plant re-observed, and the evo ES track runs a 45-dim
 drone-only actor that cannot see box heading and whose plastic head has not beaten its warm start); the
 **adaptive layer** has offline switching results on imitation bodies (NOTES 2026-10-07/08) but none of the
