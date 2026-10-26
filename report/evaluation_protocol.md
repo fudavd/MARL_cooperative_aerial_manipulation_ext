@@ -61,6 +61,18 @@ to it 40k were evaluated with --no_collision; a with-collision row on it_40000 (
 and 22 % collision terminations. Reported tables must state the condition until the tracker carries both rows. From v1.2 the
 with-collision row is the protocol number; a --no_collision row may be reported next to it as a diagnostic only.
 
+PROPOSED revision v1.3 (2026-10-27, PM; NOT yet approved, decision D21 in project_status.md §4): the joint-hold row is
+measured with NO joint-hold termination in the evaluation env (joint_hold_steps = 0 in the eval cfg). Reason: the tracker's
+eval cfg (r0_3drone/run.sh) carries the training default joint_hold_steps = 100 with joint_hold_light = false, so the env
+ends an episode on its first 100 consecutive all-attached steps whether or not the wires were taut and the virtual-box risk
+was < 1. The protocol success then has exactly one attempt per episode, and it must be clean from its first step; the
+section-3 definition places no such limit. Every protocol_joint_hold_frac reported before v1.3 is therefore a LOWER bound
+(0 in all rows to date; at d16f 60k 5.3 % of episodes reached the full all-attached second and none was clean). Rows
+measured under v1.2 remain valid as lower bounds and are labelled 'v1.2 (one-shot)'. Secondary metrics (catches, held
+fraction, detaches, two-holder spells) can shift slightly because episodes run on after the third attachment; the
+tracker carries the v1.2 row beside the v1.3 row for one full ladder before the v1.2 row is dropped. Not a change to the
+success definition, only to the measurement condition; needs the user's approval like v1.2.
+
 ## 4. Methods to compare
 
 Every adaptivity claim is a difference between rows of this list on the same cells. Rows 1-3 are static
