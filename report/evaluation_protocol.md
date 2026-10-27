@@ -72,6 +72,19 @@ measured under v1.2 remain valid as lower bounds and are labelled 'v1.2 (one-sho
 fraction, detaches, two-holder spells) can shift slightly because episodes run on after the third attachment; the
 tracker carries the v1.2 row beside the v1.3 row for one full ladder before the v1.2 row is dropped. Not a change to the
 success definition, only to the measurement condition; needs the user's approval like v1.2.
+EVIDENCE THAT v1.3 CHANGES A NUMBER (2026-10-29, -6d one-off re-evals, same cfg as the row plus joint_hold_steps = 0,
+64 x 8000): d16q 30k protocol_joint_hold_frac 0.016 under v1.3 against 0 under v1.2 (longest clean streak 1.86 s, best
+four 1.86 / 1.84 / 1.50 / 1.32 s, ~6 episodes, 14 crossings in 4 envs); d16q 38k one 1.05 s streak that the v1.2 field
+misses. d16f 60k under the same v1.3 cfg stayed 0 (2026-10-27), so the comparison across runs is fair. TWO ADDITIONS TO
+v1.3 that the re-evals exposed: (i) COUNTING: a protocol success is counted when its 1 s streak completes, not when the
+episode ends, so a streak inside an episode still running at the end of the rollout is counted (under v1.2's field the
+38k streak was missed for that reason; the denominator stays the number of episodes started); (ii) REPORTED BESIDE EACH
+SUCCESS: the mean over the successful second of sum F_up / m g, net horizontal force and the three per-drone pin F_up,
+and the label 'parked' when sum F_up <= 0 (the hooks load the box beyond its weight: the taut test is geometric, so a
+parked hold passes it) or 'light' otherwise; the headline protocol number counts both, the parked share is reported
+beside it. At d16q 30k: 3 of 16 crossings parked, the rest light (sum F_up 0.05-0.48 m g, net_h 1.4-3.1 N), and in most
+light holds one drone sits below its hook weight (partly parked); the cleanest light hold is 38k env 27's second
+crossing, per-drone F_up [1.0, 1.4, 2.4] N, sum 0.48 m g, net_h 1.6 N.
 
 ## 4. Methods to compare
 
