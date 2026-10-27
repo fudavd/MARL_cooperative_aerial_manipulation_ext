@@ -71,11 +71,12 @@ section-3 definition places no such limit. Every protocol_joint_hold_frac report
 measured under v1.2 remain valid as lower bounds and are labelled 'v1.2 (one-shot)'. Secondary metrics (catches, held
 fraction, detaches, two-holder spells) can shift slightly because episodes run on after the third attachment; the
 tracker carries the v1.2 row beside the v1.3 row for one full ladder before the v1.2 row is dropped. Not a change to the
-success definition, only to the measurement condition; approved like v1.2. ROLL-OUT (2026-10-29): diag field protocol_v13 (-6d, flycrane-meta, one commit, PM-reviewed before the tracker changes); tracker row '_3dronej' (the v1.2 cfg + joint_hold_steps 0) beside the v1.2 rows, for d16q from 42k, with the 30k / 38k one-offs backfilled under that label; the finished arms d16f 60k (jh0 one-off 0, 2026-10-27) and d16p 60k get a v1.3 number too so the §5 tables compare like with like.
+success definition, only to the measurement condition; approved like v1.2. ROLL-OUT (2026-10-29): diag field protocol_v13 (-6d, flycrane-meta dev b48f295, PM-reviewed, no defect; tests reproduce the one-offs); tracker row '_3dronej' (the v1.2 cfg + joint_hold_steps 0) beside the v1.2 rows, for d16q from 42k, with the 30k / 38k one-offs backfilled under that label; the finished arms d16f 60k (jh0 one-off 0, 2026-10-27) and d16p 60k get a v1.3 number too so the §5 tables compare like with like.
 EVIDENCE THAT v1.3 CHANGES A NUMBER (2026-10-29, -6d one-off re-evals, same cfg as the row plus joint_hold_steps = 0,
-64 x 8000): d16q 30k protocol_joint_hold_frac 0.016 under v1.3 against 0 under v1.2 (longest clean streak 1.86 s, best
-four 1.86 / 1.84 / 1.50 / 1.32 s, ~6 episodes, 14 crossings in 4 envs); d16q 38k one 1.05 s streak that the v1.2 field
-misses. d16f 60k under the same v1.3 cfg stayed 0 (2026-10-27), so the comparison across runs is fair. TWO ADDITIONS TO
+64 x 8000): d16q 30k protocol_v13 0.0127 (4 of 314 episodes started; the one-off estimate was 0.016 on ended episodes)
+against 0 under v1.2 (longest clean streak 1.86 s, best four 1.86 / 1.84 / 1.50 / 1.32 s, 14 crossings in 4 episodes,
+each counted once); d16q 38k 0.0025 (1 of 394), a 1.05 s streak in an episode still running at the last step, which the
+v1.2 field misses. d16f 60k under the same v1.3 cfg stayed 0 (2026-10-27), so the comparison across runs is fair. TWO ADDITIONS TO
 v1.3 that the re-evals exposed: (i) COUNTING: a protocol success is counted when its 1 s streak completes, not when the
 episode ends, so a streak inside an episode still running at the end of the rollout is counted (under v1.2's field the
 38k streak was missed for that reason; the denominator stays the number of episodes started); (ii) REPORTED BESIDE EACH
