@@ -61,7 +61,7 @@ to it 40k were evaluated with --no_collision; a with-collision row on it_40000 (
 and 22 % collision terminations. Reported tables must state the condition until the tracker carries both rows. From v1.2 the
 with-collision row is the protocol number; a --no_collision row may be reported next to it as a diagnostic only.
 
-Revision v1.3 (proposed 2026-10-27, PM; APPROVED by the user 2026-10-29 via AskUserQuestion in the -6d session, 'Approve v1.3', as reported by -6d; decision D21 in project_status.md §4): the joint-hold row is
+Revision v1.3 (proposed 2026-10-26, PM; APPROVED by the user 2026-10-27 via AskUserQuestion in the -6d session, 'Approve v1.3', as reported by -6d; decision D21 in project_status.md §4): the joint-hold row is
 measured with NO joint-hold termination in the evaluation env (joint_hold_steps = 0 in the eval cfg). Reason: the tracker's
 eval cfg (r0_3drone/run.sh) carries the training default joint_hold_steps = 100 with joint_hold_light = false, so the env
 ends an episode on its first 100 consecutive all-attached steps whether or not the wires were taut and the virtual-box risk
@@ -71,12 +71,12 @@ section-3 definition places no such limit. Every protocol_joint_hold_frac report
 measured under v1.2 remain valid as lower bounds and are labelled 'v1.2 (one-shot)'. Secondary metrics (catches, held
 fraction, detaches, two-holder spells) can shift slightly because episodes run on after the third attachment; the
 tracker carries the v1.2 row beside the v1.3 row for one full ladder before the v1.2 row is dropped. Not a change to the
-success definition, only to the measurement condition; approved like v1.2. ROLL-OUT (2026-10-29): diag field protocol_v13 (-6d, flycrane-meta dev b48f295, PM-reviewed, no defect; tests reproduce the one-offs); tracker row '_3dronej' (the v1.2 cfg + joint_hold_steps 0) beside the v1.2 rows, for d16q from 42k, with the 30k / 38k one-offs backfilled under that label; the finished arms d16f 60k (jh0 one-off 0, 2026-10-27) and d16p 60k get a v1.3 number too so the §5 tables compare like with like.
-EVIDENCE THAT v1.3 CHANGES A NUMBER (2026-10-29, -6d one-off re-evals, same cfg as the row plus joint_hold_steps = 0,
+success definition, only to the measurement condition; approved like v1.2. ROLL-OUT (2026-10-27): diag field protocol_v13 (-6d, flycrane-meta dev b48f295, PM-reviewed, no defect; tests reproduce the one-offs); tracker row '_3dronej' (the v1.2 cfg + joint_hold_steps 0) beside the v1.2 rows, for d16q from 42k, with the 30k / 38k one-offs backfilled under that label; the finished arms d16f 60k (jh0 one-off 0, 2026-10-27) and d16p 60k get a v1.3 number too so the §5 tables compare like with like.
+EVIDENCE THAT v1.3 CHANGES A NUMBER (2026-10-27, -6d one-off re-evals, same cfg as the row plus joint_hold_steps = 0,
 64 x 8000): d16q 30k protocol_v13 0.0127 (4 of 314 episodes started; the one-off estimate was 0.016 on ended episodes)
 against 0 under v1.2 (longest clean streak 1.86 s, best four 1.86 / 1.84 / 1.50 / 1.32 s, 14 crossings in 4 episodes,
 each counted once); d16q 38k 0.0025 (1 of 394), a 1.05 s streak in an episode still running at the last step, which the
-v1.2 field misses. d16f 60k under the same v1.3 cfg stayed 0 (2026-10-27), so the comparison across runs is fair. TWO ADDITIONS TO
+v1.2 field misses. d16f 60k under the same v1.3 cfg stayed 0 (2026-10-26), so the comparison across runs is fair. TWO ADDITIONS TO
 v1.3 that the re-evals exposed: (i) COUNTING: a protocol success is counted when its 1 s streak completes, not when the
 episode ends, so a streak inside an episode still running at the end of the rollout is counted (under v1.2's field the
 38k streak was missed for that reason; the denominator stays the number of episodes started); (ii) REPORTED BESIDE EACH
