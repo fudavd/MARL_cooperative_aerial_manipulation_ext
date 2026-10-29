@@ -14,6 +14,18 @@ row of these tables is a diagnostic, not a result.
 * Action: 5 (linear acceleration 3, body rates 2).
 * Both skills and the chain are evaluated on this plant. The evo `hover_rand` plant and the single-drone
   hook-grasp plant are development plants; their numbers are not thesis results.
+* **Revision v1.4 (PROPOSED 2026-10-29, PM; pending the user's approval; D25 in project_status.md §4): the drone's mass.**
+  The flyhook asset as converted carries a phantom 1.0 kg link (`Falcon/base_link`, no `<inertial>` in the URDF), so every
+  evaluation before 2026-10-29 ran a 1.62 kg drone (thrust-to-weight 1.33) against a controller modelled for the real
+  0.6017 kg Falcon. From the first arm trained with `phantom_link_mass=0.001` (d16u), the eval contract sets the same flag:
+  drone 0.618 kg, articulation 0.9226 kg with the hook, thrust-to-weight 2.76. Every other contract value is unchanged
+  (vbox_mu 0.6, pin_kp 150, 40 s, 64 x 8000, seed 2026, box mass 1.0 kg, protocol v1.3 success). RULES: (i) rows of pre-fix
+  arms (R0, D16 series through d16t) and post-fix arms are never compared as results; pre-fix rows stay in the tables marked
+  'heavy drone' as references for onset timing only; (ii) d16r stops being a matched control for d16u and becomes a
+  reference; (iii) regression-check pass bands test code invariants and stay; the informative numbers are re-baselined on the
+  corrected drone (vbox risk at the scripted hold 0.62, settle 0.12 m/s, share rise shared in 2-3 of 8 envs) with a WARN at
+  risk > 0.8; (iv) the hook-mass sensitivity sweep of 2026-10-29 is a heavy-drone result and is redone on the corrected
+  drone when a post-fix reference checkpoint exists. Not a change to any success definition.
 
 ## 2. Task distribution
 
