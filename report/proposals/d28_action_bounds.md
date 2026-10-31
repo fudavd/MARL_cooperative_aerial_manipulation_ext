@@ -12,7 +12,8 @@ d16u / d16u2 is d16t's recipe on the corrected 0.617 kg drone (T/W 2.76). Its ev
 | 12k | 31 | 2 | 141 |
 | 14k (resumed) | 64 | 9 | 161 |
 | 16k (resumed) | 14 | 3 | 129 |
-| 18k joint-share row (resumed; nocoll row pending) | 968 | 53 | 1036 (median episode 3.18 s, 75 catches) |
+| 18k (resumed; nocoll and joint-share rows identical) | 968 | 53 | 1036 (median episode 3.18 s; 75 catches from ~8x the episodes, not an onset) |
+| d16r 18k (heavy drone) | 10 | 1 | 129 (58 catches) |
 | d16r 14k (heavy drone) | 7 | 0 | – |
 
 The D26 rollout probe on d16u it_14000 (deterministic policy, tracker eval cfg) found the following.
