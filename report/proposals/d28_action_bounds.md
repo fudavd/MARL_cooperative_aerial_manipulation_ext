@@ -11,6 +11,8 @@ d16u / d16u2 is d16t's recipe on the corrected 0.617 kg drone (T/W 2.76). Its ev
 | 10k | 2 | 1 | 128 |
 | 12k | 31 | 2 | 141 |
 | 14k (resumed) | 64 | 9 | 161 |
+| 16k (resumed) | 14 | 3 | 129 |
+| 18k joint-share row (resumed; nocoll row pending) | 968 | 53 | 1036 (median episode 3.18 s, 75 catches) |
 | d16r 14k (heavy drone) | 7 | 0 | – |
 
 The D26 rollout probe on d16u it_14000 (deterministic policy, tracker eval cfg) found the following.
@@ -110,6 +112,8 @@ d16u 14k had only 2 catches: peak |ω| 26-32 rad/s and peak lin_acc 16 m/s². Th
 |---|---|---|
 | keep as unbounded reference (PM leans this way) | the matched comparison for d16v's check (5) at every 2k, and it shows whether the unbounded policy recovers by itself | ~31.5 h more on izar (17.9k at 01:02; 1335 it/h; 42k to go). The laptop tracker would carry two runs: 3 rows per 2k each, ~40-45 min of eval per 2k per run, against ~1.5 h per 2k of training. That roughly saturates the one-GPU tracker. Proposed: d16u2 drops to the nocoll row only (1 row per 2k) |
 | stop it to free the slot | frees one izar GPU and the tracker | loses the unbounded reference beyond 18k. d16u's 10k-18k rows already document the failure mode |
+
+**PM position after the 18k row (2026-10-31 02:07): stop d16u2 at the d16v launch.** Its deterministic policy dives in 968 of 1036 joint-share episodes within ~3 s while the stochastic training rollouts look calm; a reference that cannot survive 4 s has no comparison value beyond what is recorded. The user decides.
 
 
 ## PM review (2026-10-31 01:46, -c5)
